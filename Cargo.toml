@@ -1,0 +1,10 @@
+[workspace]
+members = ["canal-editor/src-tauri", "canal-workstation"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Hilman Nasrulloh <hnasrulloh@hotmail.com>"]
+license = "MIT"
+repository = ""
