@@ -2,13 +2,7 @@
 name = "canal-editor"
 version.workspace = true
 edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
 default-run = "canal-editor"
-# rust-version = "1.60"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
 tauri-build = { version = "1.5.1", features = [] }
