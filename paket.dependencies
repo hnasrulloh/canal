@@ -1,0 +1,9 @@
+source https://api.nuget.org/v3/index.json
+
+storage: none
+
+// Commons
+nuget FSharp.Collections.ParallelSeq 1.2.0
+
+// Communication
+nuget StreamJsonRpc 2.17.8

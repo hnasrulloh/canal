@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workspace", "workspace", "{9050D037-1517-40E0-A1E8-BA1E7F6513A2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C128281E-E212-408B-9131-FD7ADD6F85D4}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Canal.Workspace", "workspace\src\Workspace\Canal.Workspace.fsproj", "{31FF2215-AA51-4145-AC58-DC616195301B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{31FF2215-AA51-4145-AC58-DC616195301B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31FF2215-AA51-4145-AC58-DC616195301B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31FF2215-AA51-4145-AC58-DC616195301B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31FF2215-AA51-4145-AC58-DC616195301B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C128281E-E212-408B-9131-FD7ADD6F85D4} = {9050D037-1517-40E0-A1E8-BA1E7F6513A2}
+		{31FF2215-AA51-4145-AC58-DC616195301B} = {C128281E-E212-408B-9131-FD7ADD6F85D4}
+	EndGlobalSection
+EndGlobal
