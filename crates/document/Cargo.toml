@@ -6,5 +6,10 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[dependencies]
+nom.workspace = true
+tokio.workspace = true
+yrs.workspace = true
+
 [dev-dependencies]
 googletest.workspace = true
