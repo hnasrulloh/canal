@@ -1,14 +1,6 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+pub mod collab;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use googletest::prelude::*;
+mod notebook;
+pub use notebook::Notebook;
 
-    #[googletest::test]
-    fn demo() {
-        expect_that!(add(1, 1), eq(3));
-    }
-}
+pub mod parser;
