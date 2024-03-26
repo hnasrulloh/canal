@@ -1,14 +1,8 @@
 use nom::{
-    branch::alt,
-    bytes::complete::{tag, take_till, take_till1, take_while, take_while1},
-    character::{
-        complete::{alpha1, alphanumeric1, anychar, char},
-        is_alphanumeric, is_space,
-    },
-    combinator::cut,
-    error::context,
-    multi::many1,
-    sequence::{delimited, preceded, separated_pair},
+    bytes::complete::{tag, take_while1},
+    character::{complete::space0, is_alphanumeric},
+    multi::separated_list1,
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
     IResult,
 };
 
@@ -17,25 +11,38 @@ pub struct NotebookParser;
 #[derive(Debug, Clone, PartialEq)]
 struct KeyValue(String, String);
 
-fn is_valid_char_name(c: char) -> bool {
-    is_alphanumeric(c as u8) || c == '_'
+fn parse_name(input: &str) -> IResult<&str, &str> {
+    let allowed_char = |c| is_alphanumeric(c as u8) || c == '_';
+    take_while1(allowed_char)(input)
 }
 
-fn spaces(i: &str) -> IResult<&str, &str> {
-    let chars = " \t\r\n";
-    take_while(move |c| chars.contains(c))(i)
+fn parse_value_string(input: &str) -> IResult<&str, &str> {
+    let allowed_char = |c| is_alphanumeric(c as u8) || "._-".contains(c);
+    take_while1(allowed_char)(input)
 }
 
-fn parser_name(input: &str) -> IResult<&str, &str> {
-    take_while1(is_valid_char_name)(input)
+fn parse_key_value(input: &str) -> IResult<&str, KeyValue> {
+    let (input, (key, value)) = separated_pair(
+        parse_name,
+        tuple((space0, tag(":"), space0)),
+        parse_value_string,
+    )(input)?;
+
+    Ok((input, KeyValue(key.to_string(), value.to_string())))
 }
 
-fn parser_key_value(input: &str) -> IResult<&str, KeyValue> {
-    let pkey = preceded(spaces, parser_name);
-    let pseparator = cut(preceded(spaces, char(':')));
-    let pvalue = preceded(spaces, take_till1(|c| is_space(c as u8)));
-    let (remaining, (key, value)) = separated_pair(pkey, pseparator, pvalue)(input)?;
-    Ok((remaining, KeyValue(key.to_string(), value.to_string())))
+fn parse_key_value_list(input: &str) -> IResult<&str, Vec<KeyValue>> {
+    let separator = delimited(space0, tag(","), space0);
+    let bracket_open = terminated(tag("["), space0);
+    let bracket_close = preceded(space0, tag("]"));
+
+    let (input, kv_list) = delimited(
+        bracket_open,
+        separated_list1(separator, parse_key_value),
+        bracket_close,
+    )(input)?;
+
+    Ok((input, kv_list))
 }
 
 #[cfg(test)]
@@ -44,18 +51,21 @@ mod tests {
     use helpers::*;
 
     #[googletest::test]
-    fn parsing_a_valid_name() {
-        let input = "conf_key1";
-        let result = parser_name(input);
-        let expected = "conf_key1";
+    fn parsing_a_key_value_pair() {
+        let input = "a: 1.00";
+        let result = parse_key_value(input);
+        let expected = KeyValue("a".to_string(), "1.00".to_string());
         assert_parsed(result, expected);
     }
 
     #[googletest::test]
-    fn parsing_a_key_value_pair() {
-        let input = "   conf_key : value_of_1.00 ";
-        let result = parser_key_value(input);
-        let expected = KeyValue("conf_key".to_string(), "value_of_1.00".to_string());
+    fn parsing_a_list_of_key_value_pairs() {
+        let input = "[ a:1 ,b:2]";
+        let result = parse_key_value_list(input);
+        let expected = vec![
+            KeyValue("a".to_string(), "1".to_string()),
+            KeyValue("b".to_string(), "2".to_string()),
+        ];
         assert_parsed(result, expected);
     }
 
@@ -72,7 +82,7 @@ mod tests {
         {
             if let Err(ref err) = result {
                 let message = match err {
-                    nom::Err::Error(msg) => format!("Parse error: {}", msg),
+                    nom::Err::Error(msg) => format!("Parse error: \"{}\"", msg),
                     nom::Err::Failure(msg) => format!("Parse failure: {}", msg),
                     nom::Err::Incomplete(_) => "Incomplete input".to_string(),
                 };
