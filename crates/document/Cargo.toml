@@ -13,3 +13,4 @@ yrs.workspace = true
 
 [dev-dependencies]
 googletest.workspace = true
+indoc.workspace = true
