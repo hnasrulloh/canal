@@ -1,16 +1,16 @@
 use nom::{
-    bytes::complete::{tag, take_till, take_until, take_while, take_while1},
+    bytes::complete::{tag, take_while1},
     character::{
         complete::{line_ending, not_line_ending, space0},
-        is_alphanumeric, is_newline,
+        is_alphanumeric,
     },
-    combinator::{opt, rest},
+    combinator::opt,
     multi::{many0, separated_list1},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
     IResult,
 };
 
-const TAB: &'static str = "  ";
+const TAB: &str = "  ";
 
 pub struct NotebookParser;
 
