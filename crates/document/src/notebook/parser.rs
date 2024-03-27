@@ -12,13 +12,25 @@ use nom::{
 
 const TAB: &str = "  ";
 
-pub struct NotebookParser;
+#[derive(Debug, Clone)]
+pub struct NotebookParsed {
+    language: String,
+    blocks: Vec<Block>,
+}
+
+impl NotebookParsed {
+    pub fn parse(source: &str) -> Self {
+        Self {
+            language: unimplemented!(),
+            blocks: unimplemented!(),
+        }
+    }
+}
+
+type KeyValue = (String, String);
 
 #[derive(Debug, Clone, PartialEq)]
-struct KeyValue(String, String);
-
-#[derive(Debug, Clone, PartialEq)]
-struct BlockExpression {
+struct Block {
     name: String,
     config: Vec<KeyValue>,
     childs: Vec<BlockChild>,
@@ -27,7 +39,7 @@ struct BlockExpression {
 #[derive(Debug, Clone, PartialEq)]
 enum BlockChild {
     Value(String),
-    Expression(BlockExpression),
+    Block(Block),
 }
 
 fn parse_valid_name(input: &str) -> IResult<&str, &str> {
@@ -47,7 +59,7 @@ fn parse_key_value(input: &str) -> IResult<&str, KeyValue> {
         parse_value_string,
     )(input)?;
 
-    Ok((input, KeyValue(key.to_string(), value.to_string())))
+    Ok((input, (key.to_string(), value.to_string())))
 }
 
 fn parse_key_value_list(input: &str) -> IResult<&str, Vec<KeyValue>> {
@@ -100,23 +112,30 @@ fn indented_parse_block_child_value(
     }
 }
 
-fn indented_parse_block(indent_level: usize) -> impl Fn(&str) -> IResult<&str, BlockExpression> {
+fn indented_parse_block(indent_level: usize) -> impl Fn(&str) -> IResult<&str, Block> {
     move |input| {
         let indent_spaces = TAB.repeat(indent_level);
-        // let indentation = tag(indent_spaces.as_str());
+        let indentation = tag(indent_spaces.as_str());
 
-        let block_name = parse_valid_name;
-        let block_config = parse_key_value_list;
+        let brace_open = preceded(space0, terminated(tag("{"), tuple((space0, line_ending))));
+        let brace_close = preceded(indentation, terminated(tag("}"), space0));
+        let mut values = delimited(
+            brace_open,
+            indented_parse_block_child_value(indent_level + 1),
+            brace_close,
+        );
 
-        let (input, (name, _, config, _)) =
-            tuple((block_name, space0, block_config, space0))(input)?;
+        let (input, (name, _, config)) =
+            tuple((parse_valid_name, space0, parse_key_value_list))(input)?;
+
+        let (input, childs) = values(input)?;
 
         Ok((
             input,
-            BlockExpression {
+            Block {
                 name: name.to_string(),
                 config,
-                childs: vec![],
+                childs,
             },
         ))
     }
@@ -132,7 +151,7 @@ mod tests {
     fn parsing_a_key_value_pair() {
         let input = "a: 1.00";
         let result = parse_key_value(input);
-        let expected = KeyValue("a".to_string(), "1.00".to_string());
+        let expected = ("a".to_string(), "1.00".to_string());
         assert_parsed(result, expected);
     }
 
@@ -141,8 +160,8 @@ mod tests {
         let input = "[ a:1 ,b:2]";
         let result = parse_key_value_list(input);
         let expected = vec![
-            KeyValue("a".to_string(), "1".to_string()),
-            KeyValue("b".to_string(), "2".to_string()),
+            ("a".to_string(), "1".to_string()),
+            ("b".to_string(), "2".to_string()),
         ];
         assert_parsed(result, expected);
     }
@@ -169,20 +188,18 @@ mod tests {
         assert_parsed(result, expected);
     }
 
-    // TODO: Starts here
     #[googletest::test]
-    #[ignore = "Work value first"]
     fn parsing_a_block_with_value() {
         let input = indoc! {"
             text [composite: true] {
-              value in first line 
+              value in first line
               value in second line
             }
         "};
         let result = indented_parse_block(0)(input);
-        let expected = BlockExpression {
+        let expected = Block {
             name: "text".to_string(),
-            config: vec![KeyValue("composite".to_string(), "true".to_string())],
+            config: vec![("composite".to_string(), "true".to_string())],
             childs: vec![
                 BlockChild::Value("value in first line".to_string()),
                 BlockChild::Value("value in second line".to_string()),
@@ -192,7 +209,6 @@ mod tests {
     }
 
     #[googletest::test]
-    #[ignore = "Work expression first"]
     fn parsing_a_block_with_empty_config() {
         let input = indoc! {"
             text {
@@ -200,10 +216,10 @@ mod tests {
             }
         "};
         let result = indented_parse_block(0)(input);
-        let expected = BlockExpression {
+        let expected = Block {
             name: "text".to_string(),
             config: vec![],
-            childs: vec![],
+            childs: vec![BlockChild::Value("value".to_string())],
         };
         assert_parsed(result, expected);
     }
@@ -221,8 +237,8 @@ mod tests {
         {
             if let Err(ref err) = result {
                 let message = match err {
-                    nom::Err::Error(msg) => format!("Parse error: \"{}\"", msg),
-                    nom::Err::Failure(msg) => format!("Parse failure: {}", msg),
+                    nom::Err::Error(msg) => format!("Parse error:\n{}", msg),
+                    nom::Err::Failure(msg) => format!("Parse failure:\n{}", msg),
                     nom::Err::Incomplete(_) => "Incomplete input".to_string(),
                 };
 
