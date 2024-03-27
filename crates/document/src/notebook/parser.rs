@@ -72,7 +72,7 @@ fn parse_key_value_list(input: &str) -> IResult<&str, Vec<KeyValue>> {
 }
 
 fn indented_parse_line(indent_level: usize) -> impl Fn(&str) -> IResult<&str, &str> {
-    move |input: &str| {
+    move |input| {
         let indent_spaces = TAB.repeat(indent_level);
         let indentation = tag(indent_spaces.as_str());
 
@@ -100,20 +100,26 @@ fn indented_parse_block_child_value(
     }
 }
 
-fn parse_block(input: &str) -> IResult<&str, BlockExpression> {
-    let block_name = parse_valid_name;
-    let block_config = parse_key_value_list;
+fn indented_parse_block(indent_level: usize) -> impl Fn(&str) -> IResult<&str, BlockExpression> {
+    move |input| {
+        let indent_spaces = TAB.repeat(indent_level);
+        // let indentation = tag(indent_spaces.as_str());
 
-    let (input, (name, _, config, _)) = tuple((block_name, space0, block_config, space0))(input)?;
+        let block_name = parse_valid_name;
+        let block_config = parse_key_value_list;
 
-    Ok((
-        input,
-        BlockExpression {
-            name: name.to_string(),
-            config,
-            childs: vec![],
-        },
-    ))
+        let (input, (name, _, config, _)) =
+            tuple((block_name, space0, block_config, space0))(input)?;
+
+        Ok((
+            input,
+            BlockExpression {
+                name: name.to_string(),
+                config,
+                childs: vec![],
+            },
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -163,6 +169,7 @@ mod tests {
         assert_parsed(result, expected);
     }
 
+    // TODO: Starts here
     #[googletest::test]
     #[ignore = "Work value first"]
     fn parsing_a_block_with_value() {
@@ -172,7 +179,7 @@ mod tests {
               value in second line
             }
         "};
-        let result = parse_block(input);
+        let result = indented_parse_block(0)(input);
         let expected = BlockExpression {
             name: "text".to_string(),
             config: vec![KeyValue("composite".to_string(), "true".to_string())],
@@ -192,7 +199,7 @@ mod tests {
               value
             }
         "};
-        let result = parse_block(input);
+        let result = indented_parse_block(0)(input);
         let expected = BlockExpression {
             name: "text".to_string(),
             config: vec![],

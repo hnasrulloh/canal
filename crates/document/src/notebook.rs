@@ -1,3 +1,6 @@
+mod collab;
+mod parser;
+
 #[derive(Debug, Clone)]
 pub struct Notebook {
     language: String,
