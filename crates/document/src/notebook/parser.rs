@@ -8,17 +8,15 @@ use nom::{
     combinator::{map, opt, peek},
     multi::{many0, separated_list1},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
-    IResult, Parser,
+    IResult,
 };
-
-use std::iter::DoubleEndedIterator;
 
 const TAB: &str = "  ";
 
 #[derive(Debug, Clone)]
 pub struct NotebookParsed {
     language: String,
-    blocks: Vec<BlockValue>,
+    blocks: Vec<Block>,
 }
 
 impl NotebookParsed {
@@ -33,11 +31,11 @@ impl NotebookParsed {
 type KeyValue = (String, String);
 
 #[derive(Debug, Clone, PartialEq)]
-enum BlockValue {
-    Block {
+enum Block {
+    Construct {
         name: String,
         options: Vec<KeyValue>,
-        childs: Vec<BlockValue>,
+        childs: Vec<Block>,
     },
     Value(String),
 }
@@ -104,7 +102,7 @@ fn indented_parse_line(indent_level: usize) -> impl Fn(&str) -> IResult<&str, &s
 //     }
 // }
 
-fn indented_parse_block_info(
+fn indented_parse_construct_info(
     indent_level: usize,
 ) -> impl Fn(&str) -> IResult<&str, (&str, Vec<KeyValue>)> {
     move |input| {
@@ -148,11 +146,9 @@ fn indented_parse_child_end_mark(
     }
 }
 
-fn indented_parse_block_with_child_as_value(
-    indent_level: usize,
-) -> impl Fn(&str) -> IResult<&str, BlockValue> {
+fn indented_parse_construct(indent_level: usize) -> impl Fn(&str) -> IResult<&str, Block> {
     move |input| {
-        let (input, (name, options)) = indented_parse_block_info(indent_level)(input)?;
+        let (input, (name, options)) = indented_parse_construct_info(indent_level)(input)?;
 
         let (input, childs) = delimited(
             custom_parse_child_start_mark("=".to_string()),
@@ -162,12 +158,12 @@ fn indented_parse_block_with_child_as_value(
 
         Ok((
             input,
-            BlockValue::Block {
+            Block::Construct {
                 name: name.to_string(),
                 options,
                 childs: trim_empty_strings_at_vec_end(childs)
                     .into_iter()
-                    .map(|s| BlockValue::Value(s.to_string()))
+                    .map(|s| Block::Value(s.to_string()))
                     .collect(),
             },
         ))
@@ -176,9 +172,9 @@ fn indented_parse_block_with_child_as_value(
 
 fn indented_parse_block_with_child_as_block(
     indent_level: usize,
-) -> impl Fn(&str) -> IResult<&str, BlockValue> {
+) -> impl Fn(&str) -> IResult<&str, Block> {
     move |input| {
-        let (input, (name, options)) = indented_parse_block_info(indent_level)(input)?;
+        let (input, (name, options)) = indented_parse_construct_info(indent_level)(input)?;
 
         let (input, childs) = delimited(
             custom_parse_child_start_mark("=*".to_string()),
@@ -188,27 +184,27 @@ fn indented_parse_block_with_child_as_block(
 
         Ok((
             input,
-            BlockValue::Block {
+            Block::Construct {
                 name: name.to_string(),
                 options,
                 childs: trim_empty_strings_at_vec_end(childs)
                     .into_iter()
-                    .map(|s| BlockValue::Value(s.to_string()))
+                    .map(|s| Block::Value(s.to_string()))
                     .collect(),
             },
         ))
     }
 }
 
-fn indented_parse_blocks(indent_level: usize) -> impl Fn(&str) -> IResult<&str, Vec<BlockValue>> {
-    move |input| many0(indented_parse_block_with_child_as_value(indent_level))(input)
+fn indented_parse_blocks(indent_level: usize) -> impl Fn(&str) -> IResult<&str, Vec<Block>> {
+    move |input| many0(indented_parse_construct(indent_level))(input)
 }
 
-fn indented_blockvalue(indent_level: usize) -> impl Fn(&str) -> IResult<&str, BlockValue> {
+fn indented_block(indent_level: usize) -> impl Fn(&str) -> IResult<&str, Block> {
     move |input| {
         alt((
             map(indented_parse_line(indent_level), |s| {
-                BlockValue::Value(s.to_string())
+                Block::Value(s.to_string())
             }),
             indented_parse_block_with_child_as_block(indent_level),
         ))(input)
@@ -277,13 +273,13 @@ mod tests {
               value in first line
               value in second line
         "};
-        let result = indented_parse_block_with_child_as_value(0)(input);
-        let expected = BlockValue::Block {
+        let result = indented_parse_construct(0)(input);
+        let expected = Block::Construct {
             name: "executable".to_string(),
             options: vec![("echo".to_string(), "true".to_string())],
             childs: vec![
-                BlockValue::Value("value in first line".to_string()),
-                BlockValue::Value("value in second line".to_string()),
+                Block::Value("value in first line".to_string()),
+                Block::Value("value in second line".to_string()),
             ],
         };
         assert_parsed(result, expected);
@@ -303,15 +299,15 @@ mod tests {
         "};
         let result = indented_parse_blocks(0)(input);
         let expected = vec![
-            BlockValue::Block {
+            Block::Construct {
                 name: "text".to_string(),
                 options: vec![],
-                childs: vec![BlockValue::Value("value1".to_string())],
+                childs: vec![Block::Value("value1".to_string())],
             },
-            BlockValue::Block {
+            Block::Construct {
                 name: "text".to_string(),
                 options: vec![],
-                childs: vec![BlockValue::Value("value2".to_string())],
+                childs: vec![Block::Value("value2".to_string())],
             },
         ];
         assert_parsed(result, expected);
@@ -323,11 +319,11 @@ mod tests {
             block text =
               value
         "};
-        let result = indented_parse_block_with_child_as_value(0)(input);
-        let expected = BlockValue::Block {
+        let result = indented_parse_construct(0)(input);
+        let expected = Block::Construct {
             name: "text".to_string(),
             options: vec![],
-            childs: vec![BlockValue::Value("value".to_string())],
+            childs: vec![Block::Value("value".to_string())],
         };
         assert_parsed(result, expected);
     }
@@ -348,25 +344,25 @@ mod tests {
                 r2
               
         "};
-        let result = indented_parse_block_with_child_as_value(0)(input);
-        let expected = BlockValue::Block {
+        let result = indented_parse_construct(0)(input);
+        let expected = Block::Construct {
             name: "table".to_string(),
             options: vec![],
             childs: vec![
-                BlockValue::Block {
+                Block::Construct {
                     name: "table_header".to_string(),
                     options: vec![],
                     childs: vec![
-                        BlockValue::Value("h1".to_string()),
-                        BlockValue::Value("h2".to_string()),
+                        Block::Value("h1".to_string()),
+                        Block::Value("h2".to_string()),
                     ],
                 },
-                BlockValue::Block {
+                Block::Construct {
                     name: "table_row".to_string(),
                     options: vec![],
                     childs: vec![
-                        BlockValue::Value("r1".to_string()),
-                        BlockValue::Value("r2".to_string()),
+                        Block::Value("r1".to_string()),
+                        Block::Value("r2".to_string()),
                     ],
                 },
             ],
