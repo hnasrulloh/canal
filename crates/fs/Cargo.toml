@@ -1,0 +1,9 @@
+[package]
+name = "canal_fs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
