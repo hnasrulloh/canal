@@ -19,8 +19,8 @@ googletest = "0.11"
 canal_document = { path = "crates/document" }
 canal_fs = { path = "crates/fs" }
 canal_kernel = { path = "crates/kernel" }
-canal_replay = { path = "crates/replay" }
 canal_workspace = { path = "crates/workspace" }
+playdb = {path = "crates/playdb"}
 
 
 [package]

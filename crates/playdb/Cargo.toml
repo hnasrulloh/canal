@@ -1,5 +1,5 @@
 [package]
-name = "canal_replay"
+name = "playdb"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

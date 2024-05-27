@@ -29,11 +29,11 @@ name = "canal_lsp"
 version = "0.1.0"
 
 [[package]]
-name = "canal_replay"
+name = "canal_workspace"
 version = "0.1.0"
 
 [[package]]
-name = "canal_workspace"
+name = "playdb"
 version = "0.1.0"
 
 [[package]]
