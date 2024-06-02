@@ -1,3 +1,3 @@
-mod kernel;
 mod connection;
-mod repl;
+mod kernel;
+pub mod repl;

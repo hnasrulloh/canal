@@ -1,35 +1,57 @@
-use std::{
-    panic::{self, UnwindSafe},
-    process,
-};
-use thiserror::Error;
+use std::{future::Future, process};
 
-#[derive(Debug)]
-pub struct Repl {
-    process: process::Child,
+use async_trait::async_trait;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task,
+};
+
+#[async_trait]
+pub trait Repl {
+    fn new(process: process::Child, receiver: mpsc::Receiver<ReplMessage>) -> Self;
+    fn handle_message(&mut self, message: ReplMessage);
+    async fn next_message(&mut self) -> Option<ReplMessage>;
 }
 
-impl Repl {
-    pub fn launch<F>(spawn_repl: F) -> Result<Self, ReplError>
-    where
-        F: Fn() -> process::Child + 'static + UnwindSafe,
-    {
-        let catch_unwind = panic::catch_unwind(spawn_repl);
-        match catch_unwind {
-            Ok(child) => Ok(Self { process: child }),
-            Err(_) => Err(ReplError::SpawnFailed),
-        }
+pub enum ReplMessage {
+    GetStatus {
+        resonds_to: oneshot::Sender<ReplStatus>,
+    },
+}
+
+#[derive(Debug)]
+pub enum ReplStatus {
+    Idle,
+}
+
+async fn run_repl<R: Repl>(mut repl: R) {
+    while let Some(message) = repl.next_message().await {
+        repl.handle_message(message);
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ReplError {
-    #[error("")]
-    SpawnFailed,
+pub struct ReplHandle {
+    sender: mpsc::Sender<ReplMessage>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use googletest::prelude::*;
+impl ReplHandle {
+    pub fn new<R>(process: process::Child) -> Self
+    where
+        R: Repl + Send + 'static,
+    {
+        let (tx, rx) = mpsc::channel(8);
+        let repl = R::new(process, rx);
+
+        task::spawn(run_repl(repl));
+
+        Self { sender: tx }
+    }
+
+    pub async fn get_status(&self) -> ReplStatus {
+        let (tx, rx) = oneshot::channel();
+        let message = ReplMessage::GetStatus { resonds_to: tx };
+
+        let _ = self.sender.send(message).await;
+        rx.await.expect("Repl has been killed")
+    }
 }

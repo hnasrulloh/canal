@@ -11,6 +11,7 @@ homepage = ""
 
 [workspace.dependencies]
 # dependencies
+async-trait = "0.1"
 rmp-serde = "1"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
