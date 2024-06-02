@@ -11,16 +11,20 @@ homepage = ""
 
 [workspace.dependencies]
 # dependencies
+rmp-serde = "1"
+serde = { version = "1", features = ["derive"] }
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
+zeromq = "0.3.5"
 # dev-dependencies
 googletest = "0.11"
+mockall = "0.12"
 # local-dependencies
 canal_document = { path = "crates/document" }
 canal_fs = { path = "crates/fs" }
 canal_kernel = { path = "crates/kernel" }
 canal_workspace = { path = "crates/workspace" }
-playdb = {path = "crates/playdb"}
+playdb = { path = "crates/playdb" }
 
 
 [package]

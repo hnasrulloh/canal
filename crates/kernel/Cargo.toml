@@ -7,3 +7,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+rmp-serde.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeromq.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true
+googletest.workspace = true
