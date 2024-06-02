@@ -1,56 +1,55 @@
-use tokio::sync::mpsc;
+use std::panic::{self, UnwindSafe};
 use thiserror::Error;
-use tokio::task;
 
-struct Repl {
-    config: ReplConfig,
+#[derive(Debug)]
+pub struct Repl {
+    pid: u32,
 }
 
 impl Repl {
-    fn with(config: ReplConfig) -> Self {
-        Self { config }
+    pub async fn launch<F>(spawn_repl: F) -> Result<Self, ReplError>
+    where
+        F: Fn() -> u32 + 'static + UnwindSafe,
+    {
+        let catch_unwind = panic::catch_unwind(spawn_repl);
+        match catch_unwind {
+            Ok(pid) => Ok(Self { pid }),
+            Err(_) => Err(ReplError::SpawnFailed),
+        }
     }
-
-    async fn launch(&self) -> Result<(), ReplError> {
-        let (tx, mut rx) = mpsc::channel(1);
-
-        task::spawn_blocking(|| {
-            self.config.spawner(tx);
-        });
-
-        rx.blocking_recv().unwrap_or_else(|| Err(ReplError::SpawningFailed))
-    }
-}
-
-struct ReplConfig {
-    spawner: &'static spawn_repl,
 }
 
 #[derive(Error, Debug)]
 pub enum ReplError {
     #[error("")]
-    SpawningFailed,
+    SpawnFailed,
 }
-
-pub type spawn_repl = dyn FnOnce(mpsc::Sender<Result<(), ReplError>>);
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use googletest::prelude::*;
-    use crate::repl::{Repl, ReplConfig};
 
     #[googletest::test]
     #[tokio::test]
-    async fn spawning_interpreter_returns_a_result() {
-        let repl = Repl::with(ReplConfig {
-            spawner: || { Ok(()) },
-            ..default_repl_config()
-        });
+    async fn starting_a_repl_returns_ok() {
+        let result = Repl::launch(try_spawn_repl_then_success).await;
+        expect_that!(result, pat!(Ok(_)));
     }
 
-    fn default_repl_config() -> ReplConfig {
-        ReplConfig {
-            spawner: || { Ok(()) },
-        }
+    fn try_spawn_repl_then_success() -> u32 {
+        let pid = 123;
+        pid
+    }
+
+    #[googletest::test]
+    #[tokio::test]
+    async fn starting_a_repl_returns_error() {
+        let result = Repl::launch(try_spawn_repl_then_fail).await;
+        expect_that!(result, pat!(Err(pat!(ReplError::SpawnFailed))));
+    }
+
+    fn try_spawn_repl_then_fail() -> u32 {
+        panic!("Failed to run a new REPL process");
     }
 }
