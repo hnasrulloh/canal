@@ -1,6 +1,3 @@
-// TODO: Test repl with actual repl process
-// see https://stackoverflow.com/questions/77120851/rust-mocking-stdprocesschild-for-test
-
 use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
 use canal_kernel::repl::{Repl, ReplHandle, ReplMessage};
@@ -8,28 +5,43 @@ use googletest::prelude::*;
 use std::process::{self, Command};
 use tokio::{sync::mpsc, task};
 
+// TODO: Test repl with actual repl process
+// see https://stackoverflow.com/questions/77120851/rust-mocking-stdprocesschild-for-test
+
 #[googletest::test]
 #[tokio::test]
 async fn repl_executes_a_message_with_mockrepl() {
-    let child = Command::new(env!("CARGO_BIN_EXE_dummy_repl"))
-        .spawn()
-        .unwrap();
-
+    let child = spawn_dummy_repl();
     let handle = ReplHandle::new::<MockRepl>(child);
+    let (io_sender, io_receiver) = mpsc::unbounded_channel();
 
-    let (io_tx, mut io_rx) = mpsc::unbounded_channel();
+    let job = task::spawn(async move {
+        handle
+            .execute("print('hello')".to_string(), io_sender)
+            .await
+    });
 
-    let result =
-        task::spawn(async move { handle.execute("print('hello')".to_string(), io_tx).await });
+    // Check the Repl output
+    let mut output = take_all_output(io_receiver).await;
+    expect_that!(output.split(), is_utf8_string(eq("hello")));
 
+    // Check the completion status of the Repl job
+    expect_that!(job.await, pat!(Ok(_)));
+}
+
+fn spawn_dummy_repl() -> process::Child {
+    Command::new(env!("CARGO_BIN_EXE_dummy_repl"))
+        .spawn()
+        .unwrap()
+}
+
+async fn take_all_output(mut source: mpsc::UnboundedReceiver<Bytes>) -> BytesMut {
     let mut buffer = BytesMut::new();
-    while let Some(b) = io_rx.recv().await {
+    while let Some(b) = source.recv().await {
         buffer.put(b);
     }
 
-    expect_that!(buffer.split(), is_utf8_string(eq("hello")));
-
-    expect_that!(result.await, pat!(Ok(_)));
+    buffer
 }
 
 struct MockRepl {
@@ -49,6 +61,7 @@ impl Repl for MockRepl {
                 code,
                 io_sender,
             } => {
+                // Demo of the print method
                 // Take `hello` from `print('hello')`
                 let output = code
                     .split_terminator('\'')
