@@ -1,4 +1,4 @@
-use std::{future::Future, process};
+use std::process;
 
 use async_trait::async_trait;
 use tokio::{
