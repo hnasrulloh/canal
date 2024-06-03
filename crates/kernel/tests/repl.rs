@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
-use canal_kernel::repl::{Repl, ReplError, ReplHandle, ReplMessage};
+use canal_kernel::repl::{self, Repl, ReplError, ReplMessage};
 use googletest::prelude::*;
 use std::process::{self, Command};
 use tokio::{sync::mpsc, task};
@@ -11,8 +11,8 @@ use tokio::{sync::mpsc, task};
 #[googletest::test]
 #[tokio::test]
 async fn repl_executes_a_code_with_mockrepl() {
-    let child = spawn_dummy_repl();
-    let handle = ReplHandle::new::<MockRepl>(child);
+    let repl_process = spawn_dummy_repl();
+    let handle = repl::using::<MockRepl>(repl_process);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
 
     let job = task::spawn(async move {
@@ -32,8 +32,8 @@ async fn repl_executes_a_code_with_mockrepl() {
 #[googletest::test]
 #[tokio::test]
 async fn repl_executes_a_buggy_code_with_mockrepl() {
-    let child = spawn_dummy_repl();
-    let handle = ReplHandle::new::<MockRepl>(child);
+    let repl_process = spawn_dummy_repl();
+    let handle = repl::using::<MockRepl>(repl_process);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
 
     let job =

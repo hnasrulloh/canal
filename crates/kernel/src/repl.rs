@@ -42,18 +42,6 @@ pub struct ReplHandle {
 }
 
 impl ReplHandle {
-    pub fn new<R>(process: process::Child) -> Self
-    where
-        R: Repl + Send + 'static,
-    {
-        let (message_sender, message_receiver) = mpsc::channel(1);
-        let repl = R::new(process, message_receiver);
-
-        task::spawn(run_repl(repl));
-
-        Self { message_sender }
-    }
-
     pub async fn execute(
         &self,
         code: String,
@@ -69,4 +57,16 @@ impl ReplHandle {
         let _ = self.message_sender.send(message).await;
         notif_receiver.await.expect("Repl has been killed")
     }
+}
+
+pub fn using<R>(repl_process: process::Child) -> ReplHandle
+where
+    R: Repl + Send + 'static,
+{
+    let (message_sender, message_receiver) = mpsc::channel(1);
+    let repl = R::new(repl_process, message_receiver);
+
+    task::spawn(run_repl(repl));
+
+    ReplHandle { message_sender }
 }
