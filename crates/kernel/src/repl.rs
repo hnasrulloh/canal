@@ -26,7 +26,10 @@ pub enum ReplMessage {
 }
 
 #[derive(Error, Debug)]
-pub enum ReplError {}
+pub enum ReplError {
+    #[error("REPL could not execute the code properly")]
+    ExecutionFailed,
+}
 
 async fn run_repl<R: Repl>(mut repl: R) {
     while let Some(message) = repl.next_message().await {

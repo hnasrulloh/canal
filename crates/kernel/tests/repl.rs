@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
-use canal_kernel::repl::{Repl, ReplHandle, ReplMessage};
+use canal_kernel::repl::{Repl, ReplError, ReplHandle, ReplMessage};
 use googletest::prelude::*;
 use std::process::{self, Command};
 use tokio::{sync::mpsc, task};
@@ -25,8 +25,29 @@ async fn repl_executes_a_code_with_mockrepl() {
     let mut output = take_all_output(io_receiver).await;
     expect_that!(output.split(), is_utf8_string(eq("hello")));
 
-    // Check the completion status of the Repl job
-    expect_that!(job.await, pat!(Ok(_)));
+    // Check the completion status of the REPL job
+    expect_that!(job.await.unwrap(), pat!(Ok(_)));
+}
+
+#[googletest::test]
+#[tokio::test]
+async fn repl_executes_a_buggy_code_with_mockrepl() {
+    let child = spawn_dummy_repl();
+    let handle = ReplHandle::new::<MockRepl>(child);
+    let (io_sender, io_receiver) = mpsc::unbounded_channel();
+
+    let job =
+        task::spawn(async move { handle.execute("print(*buggy*".to_string(), io_sender).await });
+
+    // Check the Repl output
+    let mut output = take_all_output(io_receiver).await;
+    expect_that!(output.split(), is_utf8_string(eq("Syntax error")));
+
+    // Check the completion status of the REPL job
+    expect_that!(
+        job.await.unwrap(),
+        pat!(Err(pat!(ReplError::ExecutionFailed)))
+    );
 }
 
 fn spawn_dummy_repl() -> process::Child {
@@ -61,23 +82,33 @@ impl Repl for MockRepl {
                 io_sender,
                 code,
             } => {
-                // Demo of the print method
-                // Take `hello` from `print('hello')`
-                let output = code
-                    .split_terminator('\'')
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-                    .get(1)
-                    .unwrap()
-                    .clone();
+                // Demo of the output of code:
+                // - Working code produces `hello` from `print('hello')`
+                // - Buggy code contains `buggy` and produces output `Syntax error`
+                let is_buggy_code = code.contains("buggy");
+                let output = if is_buggy_code {
+                    "Syntax error".to_string()
+                } else {
+                    code.split_terminator('\'')
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>()
+                        .get(1)
+                        .unwrap()
+                        .clone()
+                };
 
                 let output = Bytes::from(output);
 
                 io_sender
                     .send(output)
-                    .expect("IO sender for output is not open");
+                    .expect("IO channel for output is not open");
 
-                let _ = notif_sender.send(Ok(()));
+                // Demo of job completion notification with working and buggy code
+                let _ = if is_buggy_code {
+                    notif_sender.send(Err(ReplError::ExecutionFailed))
+                } else {
+                    notif_sender.send(Ok(()))
+                };
             }
         }
     }
