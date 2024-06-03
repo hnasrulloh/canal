@@ -10,7 +10,7 @@ use tokio::{sync::mpsc, task};
 
 #[googletest::test]
 #[tokio::test]
-async fn repl_executes_a_message_with_mockrepl() {
+async fn repl_executes_a_code_with_mockrepl() {
     let child = spawn_dummy_repl();
     let handle = ReplHandle::new::<MockRepl>(child);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
