@@ -118,6 +118,7 @@ name = "canal_kernel"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "googletest",
  "mockall",
  "rmp-serde",

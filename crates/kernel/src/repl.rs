@@ -1,6 +1,8 @@
 use std::process;
 
 use async_trait::async_trait;
+use bytes::Bytes;
+use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot},
     task,
@@ -14,15 +16,15 @@ pub trait Repl {
 }
 
 pub enum ReplMessage {
-    GetStatus {
-        resonds_to: oneshot::Sender<ReplStatus>,
+    Execute {
+        responds_to: oneshot::Sender<Result<(), ReplError>>,
+        code: String,
+        io_sender: mpsc::UnboundedSender<Bytes>,
     },
 }
 
-#[derive(Debug)]
-pub enum ReplStatus {
-    Idle,
-}
+#[derive(Error, Debug)]
+pub enum ReplError {}
 
 async fn run_repl<R: Repl>(mut repl: R) {
     while let Some(message) = repl.next_message().await {
@@ -47,11 +49,19 @@ impl ReplHandle {
         Self { sender: tx }
     }
 
-    pub async fn get_status(&self) -> ReplStatus {
-        let (tx, rx) = oneshot::channel();
-        let message = ReplMessage::GetStatus { resonds_to: tx };
+    pub async fn execute(
+        &self,
+        code: String,
+        io_sender: mpsc::UnboundedSender<Bytes>,
+    ) -> Result<(), ReplError> {
+        let (notif_tx, notif_rx) = oneshot::channel();
+        let message = ReplMessage::Execute {
+            code,
+            io_sender,
+            responds_to: notif_tx,
+        };
 
         let _ = self.sender.send(message).await;
-        rx.await.expect("Repl has been killed")
+        notif_rx.await.expect("Repl has been killed")
     }
 }
