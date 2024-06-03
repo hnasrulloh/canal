@@ -45,21 +45,21 @@ async fn take_all_output(mut source: mpsc::UnboundedReceiver<Bytes>) -> BytesMut
 }
 
 struct MockRepl {
-    receiver: mpsc::Receiver<ReplMessage>,
+    message_receiver: mpsc::Receiver<ReplMessage>,
 }
 
 #[async_trait]
 impl Repl for MockRepl {
-    fn new(_process: process::Child, receiver: mpsc::Receiver<ReplMessage>) -> Self {
-        Self { receiver }
+    fn new(_process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self {
+        Self { message_receiver }
     }
 
     fn handle_message(&mut self, message: ReplMessage) {
         match message {
             ReplMessage::Execute {
-                responds_to,
-                code,
+                notif_sender,
                 io_sender,
+                code,
             } => {
                 // Demo of the print method
                 // Take `hello` from `print('hello')`
@@ -77,12 +77,12 @@ impl Repl for MockRepl {
                     .send(output)
                     .expect("IO sender for output is not open");
 
-                let _ = responds_to.send(Ok(()));
+                let _ = notif_sender.send(Ok(()));
             }
         }
     }
 
     async fn next_message(&mut self) -> Option<ReplMessage> {
-        self.receiver.recv().await
+        self.message_receiver.recv().await
     }
 }

@@ -10,16 +10,18 @@ use tokio::{
 
 #[async_trait]
 pub trait Repl {
-    fn new(process: process::Child, receiver: mpsc::Receiver<ReplMessage>) -> Self;
+    fn new(process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self;
+
     fn handle_message(&mut self, message: ReplMessage);
+
     async fn next_message(&mut self) -> Option<ReplMessage>;
 }
 
 pub enum ReplMessage {
     Execute {
-        responds_to: oneshot::Sender<Result<(), ReplError>>,
-        code: String,
+        notif_sender: oneshot::Sender<Result<(), ReplError>>,
         io_sender: mpsc::UnboundedSender<Bytes>,
+        code: String,
     },
 }
 
@@ -33,7 +35,7 @@ async fn run_repl<R: Repl>(mut repl: R) {
 }
 
 pub struct ReplHandle {
-    sender: mpsc::Sender<ReplMessage>,
+    message_sender: mpsc::Sender<ReplMessage>,
 }
 
 impl ReplHandle {
@@ -41,12 +43,12 @@ impl ReplHandle {
     where
         R: Repl + Send + 'static,
     {
-        let (tx, rx) = mpsc::channel(8);
-        let repl = R::new(process, rx);
+        let (message_sender, message_receiver) = mpsc::channel(1);
+        let repl = R::new(process, message_receiver);
 
         task::spawn(run_repl(repl));
 
-        Self { sender: tx }
+        Self { message_sender }
     }
 
     pub async fn execute(
@@ -54,14 +56,14 @@ impl ReplHandle {
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
     ) -> Result<(), ReplError> {
-        let (notif_tx, notif_rx) = oneshot::channel();
+        let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
             code,
             io_sender,
-            responds_to: notif_tx,
+            notif_sender,
         };
 
-        let _ = self.sender.send(message).await;
-        notif_rx.await.expect("Repl has been killed")
+        let _ = self.message_sender.send(message).await;
+        notif_receiver.await.expect("Repl has been killed")
     }
 }
