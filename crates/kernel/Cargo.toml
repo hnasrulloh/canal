@@ -13,6 +13,7 @@ rmp-serde.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 zeromq.workspace = true
 
 [dev-dependencies]

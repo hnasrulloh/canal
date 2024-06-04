@@ -7,12 +7,13 @@ use tokio::{
     sync::{mpsc, oneshot},
     task,
 };
+use tokio_util::sync::CancellationToken;
 
 #[async_trait]
 pub trait Repl {
     fn new(process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self;
 
-    fn handle_message(&mut self, message: ReplMessage);
+    async fn handle_message(&mut self, message: ReplMessage);
 
     async fn next_message(&mut self) -> Option<ReplMessage>;
 }
@@ -21,6 +22,7 @@ pub enum ReplMessage {
     Execute {
         notif_sender: oneshot::Sender<Result<(), ReplError>>,
         io_sender: mpsc::UnboundedSender<Bytes>,
+        sigint: CancellationToken,
         code: String,
     },
 }
@@ -29,11 +31,13 @@ pub enum ReplMessage {
 pub enum ReplError {
     #[error("REPL could not execute the code properly")]
     ExecutionFailed,
+    #[error("REPL was interupted")]
+    ExecutionInterupted,
 }
 
 async fn run_repl<R: Repl>(mut repl: R) {
     while let Some(message) = repl.next_message().await {
-        repl.handle_message(message);
+        repl.handle_message(message).await;
     }
 }
 
@@ -46,10 +50,12 @@ impl ReplHandle {
         &self,
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
+        sigint: CancellationToken, // BUG: false negative runt linter warning
     ) -> Result<(), ReplError> {
         let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
             code,
+            sigint,
             io_sender,
             notif_sender,
         };
