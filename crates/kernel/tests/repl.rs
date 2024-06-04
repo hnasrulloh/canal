@@ -1,15 +1,14 @@
 mod mock_repl;
+mod utils;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use canal_kernel::repl::{self, ReplError};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use std::{
-    process::{self, Command},
-    time::Duration,
-};
+use std::time::Duration;
 use tokio::{sync::mpsc, task, time::sleep};
 use tokio_util::sync::CancellationToken;
+use utils::spawn_dummy_repl;
 
 // TODO: Test repl with actual repl process with stdin and stdout
 // see https://stackoverflow.com/questions/77120851/rust-mocking-stdprocesschild-for-test
