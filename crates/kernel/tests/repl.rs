@@ -9,7 +9,7 @@ use std::{
 use tokio::{sync::mpsc, task, time::sleep};
 use tokio_util::sync::CancellationToken;
 
-// TODO: Test repl with actual repl process
+// TODO: Test repl with actual repl process with stdin and stdout
 // see https://stackoverflow.com/questions/77120851/rust-mocking-stdprocesschild-for-test
 
 #[googletest::test]
