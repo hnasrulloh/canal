@@ -50,7 +50,7 @@ impl ReplHandle {
         &self,
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-        sigint: CancellationToken, // BUG: false negative runt linter warning
+        sigint: CancellationToken, // BUG: false negative rust linter warning
     ) -> Result<(), ReplError> {
         let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
