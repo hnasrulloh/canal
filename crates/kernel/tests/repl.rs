@@ -92,12 +92,6 @@ async fn repl_can_be_interupted_in_mockrepl() {
     );
 }
 
-fn spawn_dummy_repl() -> process::Child {
-    Command::new(env!("CARGO_BIN_EXE_dummy_repl"))
-        .spawn()
-        .unwrap()
-}
-
 async fn take_all_output(mut source: mpsc::UnboundedReceiver<Bytes>) -> BytesMut {
     let mut buffer = BytesMut::new();
     while let Some(b) = source.recv().await {
