@@ -1,14 +1,13 @@
 mod mock_repl;
 mod utils;
 
-use bytes::{BufMut, Bytes, BytesMut};
 use canal_kernel::repl::{self, ReplError};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
 use std::time::Duration;
 use tokio::{sync::mpsc, task, time::sleep};
 use tokio_util::sync::CancellationToken;
-use utils::spawn_dummy_repl;
+use utils::{spawn_dummy_repl, take_all_output};
 
 // TODO: Test repl with mock repl process with stdin and stdout
 // see https://stackoverflow.com/questions/77120851/rust-mocking-stdprocesschild-for-test
@@ -97,13 +96,4 @@ async fn repl_can_be_killed_in_mockrepl() {
     let result = handle.kill().await;
 
     expect_that!(result, pat!(Ok(())));
-}
-
-async fn take_all_output(mut source: mpsc::UnboundedReceiver<Bytes>) -> BytesMut {
-    let mut buffer = BytesMut::new();
-    while let Some(b) = source.recv().await {
-        buffer.put(b);
-    }
-
-    buffer
 }
