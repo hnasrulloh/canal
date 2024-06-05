@@ -22,15 +22,12 @@ async fn repl_executes_a_code_in_mockrepl() {
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
 
-    let job = task::spawn(async move {
-        handle
-            .execute("print('hello')".to_string(), io_sender, sigint_job)
-            .await
-    });
+    let job =
+        task::spawn(async move { handle.execute("1".to_string(), io_sender, sigint_job).await });
 
     // Check the Repl output
     let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("hello")));
+    expect_that!(output.split(), is_utf8_string(eq("1")));
 
     // Check the completion status of the REPL job
     expect_that!(job.await.unwrap(), pat!(Ok(_)));
@@ -47,7 +44,7 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
 
     let job = task::spawn(async move {
         handle
-            .execute("print(*buggy*".to_string(), io_sender, sigint_job)
+            .execute("buggy".to_string(), io_sender, sigint_job)
             .await
     });
 
@@ -73,7 +70,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
 
     let job = task::spawn(async move {
         handle
-            .execute("expensive_op()".to_string(), io_sender, sigint_job)
+            .execute("expensive_op".to_string(), io_sender, sigint_job)
             .await
     });
 

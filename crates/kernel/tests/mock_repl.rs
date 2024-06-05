@@ -1,4 +1,4 @@
-use std::{process, time::Duration};
+use std::{io, process, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -6,13 +6,17 @@ use canal_kernel::repl::{Repl, ReplError, ReplMessage};
 use tokio::{sync::mpsc, time::sleep};
 
 pub struct MockRepl {
+    process: process::Child,
     message_receiver: mpsc::Receiver<ReplMessage>,
 }
 
 #[async_trait]
 impl Repl for MockRepl {
-    fn new(_process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self {
-        Self { message_receiver }
+    fn new(process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self {
+        Self {
+            message_receiver,
+            process,
+        }
     }
 
     async fn handle_message(&mut self, message: ReplMessage) {
@@ -34,11 +38,19 @@ impl Repl for MockRepl {
 
                 let _ = notif_sender.send(result);
             }
+            ReplMessage::Terminate { notif_sender } => {
+                let result = self.process.kill();
+                let _ = notif_sender.send(result);
+            }
         }
     }
 
     async fn next_message(&mut self) -> Option<ReplMessage> {
         self.message_receiver.recv().await
+    }
+
+    async fn terminate(self) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -49,9 +61,9 @@ impl MockRepl {
         io_sender: mpsc::UnboundedSender<Bytes>,
     ) -> std::result::Result<(), ReplError> {
         // Demo of the output of code:
-        // - Working code produces `hello` from `print('hello')`
         // - Buggy code contains `buggy` and produces output `Syntax error`
         // - `expesive_op` uses sleep to simulate long operation
+        // - Working code prints anything in code
         let is_buggy_code = code.contains("buggy");
         let is_expensive_op = code.contains("expensive_op");
 
@@ -60,14 +72,15 @@ impl MockRepl {
         } else if is_expensive_op {
             Self::simulate_expensive(io_sender).await
         } else {
-            Self::simulate_working(io_sender).await
+            Self::simulate_print(code, io_sender).await
         }
     }
 
-    async fn simulate_working(
+    async fn simulate_print(
+        code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
     ) -> std::result::Result<(), ReplError> {
-        let output = "hello";
+        let output = code;
 
         io_sender
             .send(output.into())
