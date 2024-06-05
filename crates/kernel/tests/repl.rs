@@ -79,7 +79,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
 
     // Check the Repl output
     let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("partial..")));
+    expect_that!(output.split(), is_utf8_string(eq("partial...")));
 
     // Check the completion status of the REPL job
     expect_that!(

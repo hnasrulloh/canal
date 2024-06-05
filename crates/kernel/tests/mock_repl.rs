@@ -62,7 +62,7 @@ impl MockRepl {
     ) -> std::result::Result<(), ReplError> {
         // Demo of the output of code:
         // - Buggy code contains `buggy` and produces output `Syntax error`
-        // - `expesive_op` uses sleep to simulate long operation
+        // - `expesive` uses sleep to simulate long operation without partial output `partial...`
         // - Working code prints anything in code
         let is_buggy_code = code.contains("buggy");
         let is_expensive_op = code.contains("expensive");
@@ -104,7 +104,7 @@ impl MockRepl {
     async fn simulate_expensive(
         io_sender: mpsc::UnboundedSender<Bytes>,
     ) -> std::result::Result<(), ReplError> {
-        let partial_output = "partial..";
+        let partial_output = "partial...";
         io_sender
             .send(partial_output.into())
             .expect("IO channel for output is not open");
@@ -113,7 +113,7 @@ impl MockRepl {
         // because the cancellation/sigint will take first to complete
         sleep(Duration::from_secs(10)).await;
 
-        let rest_output = "..rest";
+        let rest_output = "...rest";
         io_sender
             .send(rest_output.into())
             .expect("IO channel for output is not open");
