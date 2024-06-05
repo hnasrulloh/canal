@@ -17,17 +17,19 @@ pub struct Kernel {
 
 impl Kernel {
     pub async fn run(&mut self) {
-        match self.message_source.recv().await {
-            None => (),
-            Some(message) => match message {
-                Message::Kill => (),
-                Message::Interupt => (),
-                Message::Execute { code, io_sender } => {
-                    let sigint = CancellationToken::new();
-                    let sigint_job = sigint.clone();
-                    let _ = self.repl.execute(code, io_sender, sigint_job).await;
-                }
-            },
+        loop {
+            match self.message_source.recv().await {
+                None => (),
+                Some(message) => match message {
+                    Message::Kill => (),
+                    Message::Interupt => (),
+                    Message::Execute { code, io_sender } => {
+                        let sigint = CancellationToken::new();
+                        let sigint_job = sigint.clone();
+                        let _ = self.repl.execute(code, io_sender, sigint_job).await;
+                    }
+                },
+            }
         }
     }
 }
