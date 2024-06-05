@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::process::{self, Command};
 
 pub fn spawn_dummy_repl() -> process::Child {

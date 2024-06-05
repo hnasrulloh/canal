@@ -91,6 +91,17 @@ async fn repl_can_be_interupted_in_mockrepl() {
     );
 }
 
+#[googletest::test]
+#[tokio::test]
+async fn repl_can_be_killed_in_mockrepl() {
+    let repl_process = spawn_dummy_repl();
+    let handle = repl::using::<MockRepl>(repl_process);
+
+    let result = handle.kill().await;
+
+    expect_that!(result, pat!(Ok(())));
+}
+
 async fn take_all_output(mut source: mpsc::UnboundedReceiver<Bytes>) -> BytesMut {
     let mut buffer = BytesMut::new();
     while let Some(b) = source.recv().await {

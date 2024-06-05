@@ -1,4 +1,4 @@
-use std::process;
+use std::{io, process};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -16,6 +16,8 @@ pub trait Repl {
     async fn handle_message(&mut self, message: ReplMessage);
 
     async fn next_message(&mut self) -> Option<ReplMessage>;
+
+    async fn terminate(self) -> io::Result<()>;
 }
 
 pub enum ReplMessage {
@@ -24,6 +26,9 @@ pub enum ReplMessage {
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
         code: String,
+    },
+    Terminate {
+        notif_sender: oneshot::Sender<io::Result<()>>,
     },
 }
 
@@ -50,7 +55,7 @@ impl ReplHandle {
         &self,
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-        sigint: CancellationToken, // BUG: false negative rust linter warning
+        sigint: CancellationToken,
     ) -> Result<(), ReplError> {
         let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
@@ -61,6 +66,15 @@ impl ReplHandle {
         };
 
         let _ = self.message_sender.send(message).await;
+        notif_receiver.await.expect("Repl has been killed")
+    }
+
+    pub async fn kill(self) -> io::Result<()> {
+        let (notif_sender, notif_receiver) = oneshot::channel();
+        let message = ReplMessage::Terminate { notif_sender };
+        let _ = self.message_sender.send(message).await;
+
+        // We expect the `io::Result`, not the `Result` from chaneel
         notif_receiver.await.expect("Repl has been killed")
     }
 }
