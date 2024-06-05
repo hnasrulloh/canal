@@ -2,7 +2,7 @@ mod mock_repl;
 mod utils;
 
 use bytes::Bytes;
-use canal_kernel::{message::Message, message_queue::MessageQueue, repl, Kernel};
+use canal_kernel::{message::Message, repl, Kernel};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
 use tokio::{sync::mpsc, task};
@@ -48,7 +48,6 @@ fn create_kernel(maximum_message_capacity: usize) -> (Kernel, mpsc::Sender<Messa
 
     let kernel = Kernel {
         repl: repl::using::<MockRepl>(spawn_dummy_repl()),
-        message_queue: MessageQueue::with_capacity(maximum_message_capacity),
         message_source: message_receiver,
     };
 

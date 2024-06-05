@@ -5,13 +5,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     message::Message,
-    message_queue::MessageQueue,
     repl::{self, Repl, ReplHandle},
 };
 
 pub struct Kernel {
     pub repl: ReplHandle,
-    pub message_queue: MessageQueue<Message>,
     pub message_source: mpsc::Receiver<Message>,
 }
 
