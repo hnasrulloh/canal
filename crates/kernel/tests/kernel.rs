@@ -45,11 +45,8 @@ async fn kernel_processes_multiple_messages_succesfully() {
 
 fn create_kernel(maximum_message_capacity: usize) -> (Kernel, mpsc::Sender<Message>) {
     let (message_sender, message_receiver) = mpsc::channel(8);
-
-    let kernel = Kernel {
-        repl: repl::using::<MockRepl>(spawn_dummy_repl()),
-        message_source: message_receiver,
-    };
+    let repl = repl::using::<MockRepl>(spawn_dummy_repl());
+    let kernel = Kernel::new(repl, message_receiver, maximum_message_capacity);
 
     (kernel, message_sender)
 }
