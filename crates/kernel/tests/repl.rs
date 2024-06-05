@@ -50,7 +50,7 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
 
     // Check the Repl output
     let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("Syntax error")));
+    expect_that!(output.split(), is_utf8_string(eq("error")));
 
     // Check the completion status of the REPL job
     expect_that!(
@@ -70,7 +70,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
 
     let job = task::spawn(async move {
         handle
-            .execute("expensive_op".to_string(), io_sender, sigint_job)
+            .execute("expensive".to_string(), io_sender, sigint_job)
             .await
     });
 
@@ -79,7 +79,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
 
     // Check the Repl output
     let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("Partial output...")));
+    expect_that!(output.split(), is_utf8_string(eq("partial..")));
 
     // Check the completion status of the REPL job
     expect_that!(
