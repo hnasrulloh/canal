@@ -25,8 +25,7 @@ async fn repl_executes_a_code_in_mockrepl() {
         task::spawn(async move { handle.execute("1".to_string(), io_sender, sigint_job).await });
 
     // Check the Repl output
-    let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("1")));
+    expect_that!(take_all_output(io_receiver).await, is_utf8_string(eq("1")));
 
     // Check the completion status of the REPL job
     expect_that!(job.await.unwrap(), pat!(Ok(_)));
@@ -48,8 +47,10 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
     });
 
     // Check the Repl output
-    let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("error")));
+    expect_that!(
+        take_all_output(io_receiver).await,
+        is_utf8_string(eq("error"))
+    );
 
     // Check the completion status of the REPL job
     expect_that!(
@@ -77,8 +78,10 @@ async fn repl_can_be_interupted_in_mockrepl() {
     sigint.cancel();
 
     // Check the Repl output
-    let mut output = take_all_output(io_receiver).await;
-    expect_that!(output.split(), is_utf8_string(eq("partial...")));
+    expect_that!(
+        take_all_output(io_receiver).await,
+        is_utf8_string(eq("partial..."))
+    );
 
     // Check the completion status of the REPL job
     expect_that!(
