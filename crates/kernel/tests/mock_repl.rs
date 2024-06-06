@@ -111,7 +111,7 @@ impl MockRepl {
 
         // This long running operation (with sleep) will not completely executed (dropped)
         // because the cancellation/sigint will take first to complete
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(1)).await;
 
         let rest_output = "...rest";
         io_sender

@@ -2,44 +2,53 @@ mod mock_repl;
 mod utils;
 
 use bytes::Bytes;
-use canal_kernel::{message::Message, repl, Kernel};
+use canal_kernel::{message::Message, repl, run, Kernel};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
 use tokio::{sync::mpsc, task};
-use utils::spawn_dummy_repl;
+use utils::{spawn_dummy_repl, take_all_output};
 
 #[googletest::test]
 #[tokio::test]
 async fn kernel_processes_a_message_succesfully() {
-    let (mut kernel, message_sender) = create_kernel(10);
-    let (message, mut io_receiver) = create_message_execute("1");
+    let (kernel, message_sender) = create_kernel(10);
+    let (message, io_receiver) = create_message_execute("1");
 
-    task::spawn(async move { kernel.run().await });
+    task::spawn(async move { run(kernel).await });
     message_sender.send(message).await.unwrap();
 
-    let output = io_receiver.recv().await.expect("Output is empty");
-    expect_that!(output, is_utf8_string(eq("1")));
+    expect_that!(take_all_output(io_receiver).await, is_utf8_string(eq("1")));
 }
 
 #[googletest::test]
 #[tokio::test]
 async fn kernel_processes_multiple_messages_succesfully() {
-    let (mut kernel, message_sender) = create_kernel(10);
-    let (message1, mut io_receiver1) = create_message_execute("1");
-    let (message2, mut io_receiver2) = create_message_execute("2");
+    let (kernel, message_sender) = create_kernel(10);
+    let (message1, io_receiver1) = create_message_execute("1");
+    let (message2, io_receiver2) = create_message_execute("2");
 
-    task::spawn(async move { kernel.run().await });
+    task::spawn(async move { run(kernel).await });
     message_sender.send(message1).await.unwrap();
     message_sender.send(message2).await.unwrap();
 
-    expect_that!(
-        io_receiver1.recv().await.expect("Output is empty"),
-        is_utf8_string(eq("1"))
-    );
+    expect_that!(take_all_output(io_receiver1).await, is_utf8_string(eq("1")));
+    expect_that!(take_all_output(io_receiver2).await, is_utf8_string(eq("2")));
+}
+
+#[googletest::test]
+#[tokio::test]
+async fn kernel_can_be_interupted() {
+    let (kernel, message_sender) = create_kernel(10);
+    let (exec_message, io_receiver) = create_message_execute("expensive");
+
+    task::spawn(async move { run(kernel).await });
+    message_sender.send(exec_message).await.unwrap();
+    message_sender.send(Message::Interupt).await.unwrap();
+    // TODO: fix this: idea use own message queue instead of channel
 
     expect_that!(
-        io_receiver2.recv().await.expect("Output is empty"),
-        is_utf8_string(eq("2"))
+        take_all_output(io_receiver).await,
+        is_utf8_string(eq("partial..."))
     );
 }
 
