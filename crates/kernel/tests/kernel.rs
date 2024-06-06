@@ -56,6 +56,38 @@ async fn kernel_can_be_interupted() {
     );
 }
 
+#[googletest::test]
+#[tokio::test]
+async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
+    let (kernel, message_sender) = create_kernel(10);
+
+    task::spawn(async move { run(kernel).await });
+
+    let (message1, io_receiver1) = create_message_execute("expensive");
+    message_sender.send(message1).await.unwrap();
+
+    let (message2, io_receiver2) = create_message_execute("2");
+    message_sender.send(message2).await.unwrap();
+
+    let (message3, io_receiver3) = create_message_execute("3");
+    message_sender.send(message3).await.unwrap();
+
+    // A slight waiting needed to avoid message processing race
+    sleep(Duration::from_micros(10)).await;
+    message_sender.send(Message::Interupt).await.unwrap();
+
+    expect_that!(
+        take_all_output(io_receiver1).await,
+        is_utf8_string(eq("partial..."))
+    );
+
+    // No output for cancelled execs
+    expect_that!(take_all_output(io_receiver2).await, is_utf8_string(eq("")));
+    expect_that!(take_all_output(io_receiver3).await, is_utf8_string(eq("")));
+
+    // TODO: Redesign kernel as an Actor
+}
+
 fn create_kernel(maximum_message_capacity: usize) -> (Kernel, mpsc::Sender<Message>) {
     let (message_sender, message_receiver) = mpsc::channel(8);
     let repl = repl::using::<MockRepl>(spawn_dummy_repl());

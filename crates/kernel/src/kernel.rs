@@ -51,6 +51,9 @@ async fn handle_message(mut source: mpsc::Receiver<Message>, exec_queue: Arc<Mut
                 }
                 Message::Interupt => {
                     sigint.cancel();
+
+                    let mut exec_queue = exec_queue.lock().await;
+                    while let Some(_) = exec_queue.recv().await {}
                 }
                 Message::Execute { code, io_sender } => {
                     let sigint = sigint.clone();
