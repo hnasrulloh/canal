@@ -38,9 +38,10 @@ pub async fn run(kernel: Kernel) {
 }
 
 async fn handle_message(mut source: mpsc::Receiver<Message>, exec_queue: Arc<Mutex<ExecQueue>>) {
+    let sigint = CancellationToken::new();
+
     loop {
         let exec_queue = exec_queue.clone();
-        let sigint = CancellationToken::new();
 
         match source.recv().await {
             None => (),

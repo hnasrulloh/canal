@@ -1,11 +1,13 @@
 mod mock_repl;
 mod utils;
 
+use std::time::Duration;
+
 use bytes::Bytes;
 use canal_kernel::{message::Message, repl, run, Kernel};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use tokio::{sync::mpsc, task};
+use tokio::{sync::mpsc, task, time::sleep};
 use utils::{spawn_dummy_repl, take_all_output};
 
 #[googletest::test]
@@ -43,8 +45,10 @@ async fn kernel_can_be_interupted() {
 
     task::spawn(async move { run(kernel).await });
     message_sender.send(exec_message).await.unwrap();
+
+    // A slight waiting needed to avoid message processing race
+    sleep(Duration::from_micros(10)).await;
     message_sender.send(Message::Interupt).await.unwrap();
-    // TODO: fix this: idea use own message queue instead of channel
 
     expect_that!(
         take_all_output(io_receiver).await,
