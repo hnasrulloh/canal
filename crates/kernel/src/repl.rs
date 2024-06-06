@@ -79,7 +79,7 @@ impl ReplHandle {
     }
 }
 
-pub fn using<R>(repl_process: process::Child) -> ReplHandle
+pub fn launch<R>(repl_process: process::Child) -> ReplHandle
 where
     R: Repl + Send + 'static,
 {

@@ -16,7 +16,7 @@ use utils::{spawn_dummy_repl, take_all_output};
 #[tokio::test]
 async fn repl_executes_a_code_in_mockrepl() {
     let repl_process = spawn_dummy_repl();
-    let handle = repl::using::<MockRepl>(repl_process);
+    let handle = repl::launch::<MockRepl>(repl_process);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -35,7 +35,7 @@ async fn repl_executes_a_code_in_mockrepl() {
 #[tokio::test]
 async fn repl_executes_a_buggy_code_in_mockrepl() {
     let repl_process = spawn_dummy_repl();
-    let handle = repl::using::<MockRepl>(repl_process);
+    let handle = repl::launch::<MockRepl>(repl_process);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -63,7 +63,7 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
 #[tokio::test]
 async fn repl_can_be_interupted_in_mockrepl() {
     let repl_process = spawn_dummy_repl();
-    let handle = repl::using::<MockRepl>(repl_process);
+    let handle = repl::launch::<MockRepl>(repl_process);
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -94,7 +94,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
 #[tokio::test]
 async fn repl_can_be_killed_in_mockrepl() {
     let repl_process = spawn_dummy_repl();
-    let handle = repl::using::<MockRepl>(repl_process);
+    let handle = repl::launch::<MockRepl>(repl_process);
 
     let result = handle.kill().await;
 
