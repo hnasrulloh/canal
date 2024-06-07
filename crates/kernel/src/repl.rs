@@ -2,12 +2,13 @@ use std::{io, process};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot},
     task,
 };
 use tokio_util::sync::CancellationToken;
+
+use crate::ExecutionError;
 
 #[async_trait]
 pub trait Repl {
@@ -22,28 +23,14 @@ pub trait Repl {
 
 pub enum ReplMessage {
     Execute {
-        notif_sender: oneshot::Sender<Result<(), ReplError>>,
+        notif_sender: oneshot::Sender<Result<(), ExecutionError>>,
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
         code: String,
     },
-    Terminate {
+    Kill {
         notif_sender: oneshot::Sender<io::Result<()>>,
     },
-}
-
-#[derive(Error, Debug)]
-pub enum ReplError {
-    #[error("REPL could not execute the code properly")]
-    ExecutionFailed,
-    #[error("REPL was interupted")]
-    ExecutionInterupted,
-}
-
-async fn run_repl<R: Repl>(mut repl: R) {
-    while let Some(message) = repl.next_message().await {
-        repl.handle_message(message).await;
-    }
 }
 
 pub struct ReplHandle {
@@ -56,7 +43,7 @@ impl ReplHandle {
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
-    ) -> Result<(), ReplError> {
+    ) -> Result<(), ExecutionError> {
         let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
             code,
@@ -71,7 +58,7 @@ impl ReplHandle {
 
     pub async fn kill(self) -> io::Result<()> {
         let (notif_sender, notif_receiver) = oneshot::channel();
-        let message = ReplMessage::Terminate { notif_sender };
+        let message = ReplMessage::Kill { notif_sender };
         let _ = self.message_sender.send(message).await;
 
         // We expect the `io::Result`, not the `Result` from chaneel
@@ -89,4 +76,10 @@ where
     task::spawn(run_repl(repl));
 
     ReplHandle { message_sender }
+}
+
+async fn run_repl<R: Repl>(mut repl: R) {
+    while let Some(message) = repl.next_message().await {
+        repl.handle_message(message).await;
+    }
 }

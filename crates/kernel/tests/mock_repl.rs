@@ -2,7 +2,10 @@ use std::{io, process, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use canal_kernel::repl::{Repl, ReplError, ReplMessage};
+use canal_kernel::{
+    repl::{Repl, ReplMessage},
+    ExecutionError,
+};
 use tokio::{sync::mpsc, time::sleep};
 
 pub struct MockRepl {
@@ -32,13 +35,13 @@ impl Repl for MockRepl {
                         execution_result
                     },
                     _ = sigint.cancelled() => {
-                        Err(ReplError::ExecutionInterupted)
+                        Err(ExecutionError::Interrupted)
                     },
                 };
 
                 let _ = notif_sender.send(result);
             }
-            ReplMessage::Terminate { notif_sender } => {
+            ReplMessage::Kill { notif_sender } => {
                 let result = self.process.kill();
                 let _ = notif_sender.send(result);
             }
@@ -59,7 +62,7 @@ impl MockRepl {
         &self,
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ReplError> {
+    ) -> std::result::Result<(), ExecutionError> {
         // Demo of the output of code:
         // - Buggy code contains `buggy` and produces output `Syntax error`
         // - `expesive` uses sleep to simulate long operation without partial output `partial...`
@@ -79,7 +82,7 @@ impl MockRepl {
     async fn simulate_print(
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ReplError> {
+    ) -> std::result::Result<(), ExecutionError> {
         let output = code;
 
         io_sender
@@ -91,19 +94,19 @@ impl MockRepl {
 
     async fn simulate_buggy(
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ReplError> {
+    ) -> std::result::Result<(), ExecutionError> {
         let output = "error";
 
         io_sender
             .send(output.into())
             .expect("IO channel for output is not open");
 
-        Err(ReplError::ExecutionFailed)
+        Err(ExecutionError::Failed)
     }
 
     async fn simulate_expensive(
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ReplError> {
+    ) -> std::result::Result<(), ExecutionError> {
         let partial_output = "partial...";
         io_sender
             .send(partial_output.into())
