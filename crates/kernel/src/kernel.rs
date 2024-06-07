@@ -115,7 +115,7 @@ async fn run_kernel(
                     let _ = exec_result_sender.send(err).await;
                 }
             }
-            else => continue,
+            else => {},
         }
     }
 }
