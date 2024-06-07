@@ -49,7 +49,7 @@ async fn kernel_processes_multiple_messages_succesfully() {
 
 #[googletest::test]
 #[tokio::test]
-async fn kernel_can_be_interupted() {
+async fn kernel_returns_an_error_when_interupted() {
     let mut handle = create_kernel(10);
     let (msg_exec, io_receiver) = create_message(99, "expensive");
 
@@ -116,6 +116,26 @@ async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
     expect_that!(
         take_all_output(io_receiver3).await,
         is_utf8_string(eq("")) // no byte sent
+    );
+}
+
+#[googletest::test]
+#[tokio::test]
+async fn kernel_returns_an_error_when_code_is_buggy() {
+    let mut handle = create_kernel(10);
+    let (msg_exec, io_receiver) = create_message(99, "buggy");
+
+    let queue_result = handle.send(msg_exec).await;
+    let exec_result = handle.recv().await;
+
+    expect_that!(queue_result, pat!(Ok(_)));
+    expect_that!(
+        exec_result,
+        pat!(Some(pat!(Err(pat!(MessageError::Failed(pat!(99)))))))
+    );
+    expect_that!(
+        take_all_output(io_receiver).await,
+        is_utf8_string(eq("error"))
     );
 }
 
