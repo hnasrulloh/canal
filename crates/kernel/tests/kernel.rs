@@ -1,13 +1,10 @@
 mod mock_repl;
 mod utils;
 
-use std::time::Duration;
-
-use bytes::Bytes;
 use canal_kernel::{kernel, repl, Message};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use tokio::{sync::mpsc, task, time::sleep};
+use tokio::sync::mpsc;
 use utils::{spawn_dummy_repl, take_all_output};
 
 #[googletest::test]

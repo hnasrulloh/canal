@@ -18,8 +18,8 @@ pub enum Message {
 
 #[derive(Error, Debug)]
 pub enum MessageError {
-    #[error("")]
+    #[error("Message (id={0}) could not be executed properly")]
     Failed(MessageId),
-    #[error("")]
+    #[error("Message (id={0}) was cancelled")]
     Cancelled(MessageId),
 }

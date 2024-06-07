@@ -171,57 +171,6 @@ struct Exec {
     code: String,
     io_sender: mpsc::UnboundedSender<Bytes>,
     sigint: CancellationToken,
+    #[allow(dead_code)]
     permit: OwnedSemaphorePermit,
 }
-
-// pub async fn run(kernel: Kernel) {
-//     let exec_queue = kernel.exec_queue.clone();
-//     task::spawn(async { handle_message(kernel.message_receiver, exec_queue).await });
-
-//     let exec_queue = kernel.exec_queue.clone();
-//     task::spawn(async { execute(exec_queue, kernel.repl).await });
-// }
-
-// async fn handle_message(mut source: mpsc::Receiver<Message>, exec_queue: Arc<Mutex<ExecQueue>>) {
-//     let sigint = CancellationToken::new();
-
-//     loop {
-//         let exec_queue = exec_queue.clone();
-
-//         match source.recv().await {
-//             None => (),
-//             Some(message) => match message {
-//                 Message::Kill => {
-//                     break;
-//                 }
-//                 Message::Interupt => {
-//                     sigint.cancel();
-
-//                     let mut exec_queue = exec_queue.lock().await;
-//                     while let Some(_) = exec_queue.recv().await {}
-//                 }
-//                 Message::Execute { code, io_sender } => {
-//                     let sigint = sigint.clone();
-
-//                     let exec = Exec {
-//                         message_id
-//                         code,
-//                         io_sender,
-//                         sigint,
-//                     };
-
-//                     let mut exec_queue = exec_queue.lock().await;
-//                     let _ = exec_queue.send(exec).await;
-//                 }
-//             },
-//         }
-//     }
-// }
-
-// async fn execute(exec_queue: Arc<Mutex<ExecQueue>>, repl: ReplHandle) {
-//     let mut exec_queue = exec_queue.lock().await;
-
-//     while let Some(exec) = exec_queue.recv().await {
-//         let _ = repl.execute(exec.code, exec.io_sender, exec.sigint).await;
-//     }
-// }
