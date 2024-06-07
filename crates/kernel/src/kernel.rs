@@ -1,109 +1,227 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use tokio::{
-    sync::{mpsc, Mutex},
+    sync::{
+        mpsc::{self, error::SendError},
+        OwnedSemaphorePermit, Semaphore,
+    },
     task,
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::{message::Message, repl::ReplHandle};
+use crate::{
+    repl::{ReplError, ReplHandle},
+    Message, MessageError, MessageId,
+};
+
+pub struct KernelHandle {
+    message_sender: mpsc::Sender<Message>,
+    exec_result_receiver: mpsc::Receiver<Result<MessageId, MessageError>>,
+}
+
+impl KernelHandle {
+    pub async fn send(&self, message: Message) -> Result<(), SendError<Message>> {
+        self.message_sender.send(message).await
+    }
+
+    pub async fn recv(&mut self) -> Option<Result<MessageId, MessageError>> {
+        self.exec_result_receiver.recv().await
+    }
+}
 
 pub struct Kernel {
     repl: ReplHandle,
-    message_source: mpsc::Receiver<Message>,
-    exec_queue: Arc<Mutex<ExecQueue>>,
 }
 
 impl Kernel {
-    pub fn new(
-        repl: ReplHandle,
-        message_source: mpsc::Receiver<Message>,
-        max_queue_capacity: usize,
-    ) -> Self {
-        Self {
-            repl,
-            message_source,
-            exec_queue: Arc::new(Mutex::new(ExecQueue::new(max_queue_capacity))),
-        }
-    }
-}
+    async fn handle_exec(
+        &self,
+        exec: Exec,
+        exec_result_sender: mpsc::Sender<Result<MessageId, MessageError>>,
+    ) {
+        let result = self
+            .repl
+            .execute(exec.code, exec.io_sender, exec.sigint)
+            .await;
 
-pub async fn run(kernel: Kernel) {
-    let exec_queue = kernel.exec_queue.clone();
-    task::spawn(async { handle_message(kernel.message_source, exec_queue).await });
-
-    let exec_queue = kernel.exec_queue.clone();
-    task::spawn(async { execute(exec_queue, kernel.repl).await });
-}
-
-async fn handle_message(mut source: mpsc::Receiver<Message>, exec_queue: Arc<Mutex<ExecQueue>>) {
-    let sigint = CancellationToken::new();
-
-    loop {
-        let exec_queue = exec_queue.clone();
-
-        match source.recv().await {
-            None => (),
-            Some(message) => match message {
-                Message::Kill => {
-                    break;
+        match result {
+            Ok(_) => {
+                let _ = exec_result_sender.send(Ok(exec.message_id)).await;
+            }
+            Err(e) => match e {
+                ReplError::Failed => {
+                    let msg_err = Err(MessageError::Failed(exec.message_id));
+                    let _ = exec_result_sender.send(msg_err).await;
                 }
-                Message::Interupt => {
-                    sigint.cancel();
-
-                    let mut exec_queue = exec_queue.lock().await;
-                    while let Some(_) = exec_queue.recv().await {}
-                }
-                Message::Execute { code, io_sender } => {
-                    let sigint = sigint.clone();
-
-                    let exec = Exec {
-                        code,
-                        io_sender,
-                        sigint,
-                    };
-
-                    let mut exec_queue = exec_queue.lock().await;
-                    let _ = exec_queue.send(exec).await;
+                ReplError::Interrupted => {
+                    let msg_err = Err(MessageError::Cancelled(exec.message_id));
+                    let _ = exec_result_sender.send(msg_err).await;
                 }
             },
+        };
+    }
+}
+
+pub fn launch(repl: ReplHandle, queue_capacity: usize) -> KernelHandle {
+    let (message_sender, kernel_message_receiver) = mpsc::channel(queue_capacity);
+
+    let (exec_sender, exec_receiver) = mpsc::channel(queue_capacity);
+    let (exec_cancellation_request_sender, exec_cancellation_request_receiver) = mpsc::channel(1);
+    let (exec_result_sender, exec_result_receiver) = mpsc::channel(2 * queue_capacity);
+
+    let semaphore = Arc::new(Semaphore::new(queue_capacity));
+
+    task::spawn(process_message(
+        kernel_message_receiver,
+        exec_sender,
+        exec_cancellation_request_sender,
+        semaphore,
+    ));
+
+    let kernel = Kernel { repl };
+    task::spawn(run_kernel(
+        kernel,
+        exec_receiver,
+        exec_cancellation_request_receiver,
+        exec_result_sender,
+    ));
+
+    KernelHandle {
+        message_sender,
+        exec_result_receiver,
+    }
+}
+
+async fn run_kernel(
+    kernel: Kernel,
+    mut exec_receiver: mpsc::Receiver<Exec>,
+    mut exec_cancellation_request_receiver: mpsc::Receiver<usize>,
+    exec_result_sender: mpsc::Sender<Result<MessageId, MessageError>>,
+) {
+    loop {
+        let exec_result_sender = exec_result_sender.clone();
+
+        tokio::select! {
+            Some(exec) = exec_receiver.recv() => {
+                kernel.handle_exec(exec, exec_result_sender).await;
+            }
+            Some(number_of_dropped_exec) = exec_cancellation_request_receiver.recv() => {
+                let mut execs = Vec::new();
+                exec_receiver.recv_many(&mut execs, number_of_dropped_exec).await;
+
+                for exec in execs.into_iter() {
+                    let err = Err(MessageError::Cancelled(exec.message_id));
+                    let _ = exec_result_sender.send(err).await;
+                }
+            }
+            else => continue,
         }
     }
 }
 
-async fn execute(exec_queue: Arc<Mutex<ExecQueue>>, repl: ReplHandle) {
-    let mut exec_queue = exec_queue.lock().await;
+async fn process_message(
+    mut message_receiver: mpsc::Receiver<Message>,
+    exec_sender: mpsc::Sender<Exec>,
+    exec_cancellation_request_sender: mpsc::Sender<usize>,
+    semaphore: Arc<Semaphore>,
+) {
+    let sigint_control = CancellationToken::new();
 
-    while let Some(exec) = exec_queue.recv().await {
-        let _ = repl.execute(exec.code, exec.io_sender, exec.sigint).await;
+    while let Some(msg) = message_receiver.recv().await {
+        let semaphore = semaphore.clone();
+
+        match msg {
+            Message::Execute {
+                message_id,
+                io_sender,
+                code,
+            } => {
+                let permit = semaphore
+                    .acquire_owned()
+                    .await
+                    .expect("Semaphore acquire error");
+
+                let sigint = sigint_control.child_token();
+
+                let exec = Exec {
+                    message_id,
+                    code,
+                    io_sender,
+                    sigint,
+                    permit,
+                };
+
+                let _ = exec_sender.send(exec).await;
+            }
+            Message::Interrupt => {
+                let number_of_cancelled_exec = semaphore.available_permits();
+                let _ = exec_cancellation_request_sender
+                    .send(number_of_cancelled_exec)
+                    .await;
+
+                sigint_control.cancel();
+            }
+        }
     }
 }
 
 struct Exec {
+    message_id: u32,
     code: String,
     io_sender: mpsc::UnboundedSender<Bytes>,
     sigint: CancellationToken,
+    permit: OwnedSemaphorePermit,
 }
 
-struct ExecQueue {
-    max_capacity: usize,
-    queue: VecDeque<Exec>,
-}
+// pub async fn run(kernel: Kernel) {
+//     let exec_queue = kernel.exec_queue.clone();
+//     task::spawn(async { handle_message(kernel.message_receiver, exec_queue).await });
 
-impl ExecQueue {
-    fn new(max_capacity: usize) -> Self {
-        Self {
-            queue: VecDeque::with_capacity(max_capacity),
-            max_capacity,
-        }
-    }
+//     let exec_queue = kernel.exec_queue.clone();
+//     task::spawn(async { execute(exec_queue, kernel.repl).await });
+// }
 
-    async fn send(&mut self, exec: Exec) {
-        self.queue.push_back(exec);
-    }
+// async fn handle_message(mut source: mpsc::Receiver<Message>, exec_queue: Arc<Mutex<ExecQueue>>) {
+//     let sigint = CancellationToken::new();
 
-    async fn recv(&mut self) -> Option<Exec> {
-        self.queue.pop_front()
-    }
-}
+//     loop {
+//         let exec_queue = exec_queue.clone();
+
+//         match source.recv().await {
+//             None => (),
+//             Some(message) => match message {
+//                 Message::Kill => {
+//                     break;
+//                 }
+//                 Message::Interupt => {
+//                     sigint.cancel();
+
+//                     let mut exec_queue = exec_queue.lock().await;
+//                     while let Some(_) = exec_queue.recv().await {}
+//                 }
+//                 Message::Execute { code, io_sender } => {
+//                     let sigint = sigint.clone();
+
+//                     let exec = Exec {
+//                         message_id
+//                         code,
+//                         io_sender,
+//                         sigint,
+//                     };
+
+//                     let mut exec_queue = exec_queue.lock().await;
+//                     let _ = exec_queue.send(exec).await;
+//                 }
+//             },
+//         }
+//     }
+// }
+
+// async fn execute(exec_queue: Arc<Mutex<ExecQueue>>, repl: ReplHandle) {
+//     let mut exec_queue = exec_queue.lock().await;
+
+//     while let Some(exec) = exec_queue.recv().await {
+//         let _ = repl.execute(exec.code, exec.io_sender, exec.sigint).await;
+//     }
+// }

@@ -1,7 +1,7 @@
 mod mock_repl;
 mod utils;
 
-use canal_kernel::{repl, ExecutionError};
+use canal_kernel::repl::{self, ReplError};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
 use std::time::Duration;
@@ -53,7 +53,7 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
     );
 
     // Check the completion status of the REPL job
-    expect_that!(job.await.unwrap(), pat!(Err(pat!(ExecutionError::Failed))));
+    expect_that!(job.await.unwrap(), pat!(Err(pat!(ReplError::Failed))));
 }
 
 #[googletest::test]
@@ -81,10 +81,7 @@ async fn repl_can_be_interupted_in_mockrepl() {
     );
 
     // Check the completion status of the REPL job
-    expect_that!(
-        job.await.unwrap(),
-        pat!(Err(pat!(ExecutionError::Interrupted)))
-    );
+    expect_that!(job.await.unwrap(), pat!(Err(pat!(ReplError::Interrupted))));
 }
 
 #[googletest::test]

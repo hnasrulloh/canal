@@ -2,10 +2,7 @@ use std::{io, process, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use canal_kernel::{
-    repl::{Repl, ReplMessage},
-    ExecutionError,
-};
+use canal_kernel::repl::{Repl, ReplError, ReplMessage};
 use tokio::{sync::mpsc, time::sleep};
 
 pub struct MockRepl {
@@ -35,7 +32,7 @@ impl Repl for MockRepl {
                         execution_result
                     },
                     _ = sigint.cancelled() => {
-                        Err(ExecutionError::Interrupted)
+                        Err(ReplError::Interrupted)
                     },
                 };
 
@@ -62,7 +59,7 @@ impl MockRepl {
         &self,
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ExecutionError> {
+    ) -> std::result::Result<(), ReplError> {
         // Demo of the output of code:
         // - Buggy code contains `buggy` and produces output `Syntax error`
         // - `expesive` uses sleep to simulate long operation without partial output `partial...`
@@ -82,7 +79,7 @@ impl MockRepl {
     async fn simulate_print(
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ExecutionError> {
+    ) -> std::result::Result<(), ReplError> {
         let output = code;
 
         io_sender
@@ -94,19 +91,19 @@ impl MockRepl {
 
     async fn simulate_buggy(
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ExecutionError> {
+    ) -> std::result::Result<(), ReplError> {
         let output = "error";
 
         io_sender
             .send(output.into())
             .expect("IO channel for output is not open");
 
-        Err(ExecutionError::Failed)
+        Err(ReplError::Failed)
     }
 
     async fn simulate_expensive(
         io_sender: mpsc::UnboundedSender<Bytes>,
-    ) -> std::result::Result<(), ExecutionError> {
+    ) -> std::result::Result<(), ReplError> {
         let partial_output = "partial...";
         io_sender
             .send(partial_output.into())

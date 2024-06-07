@@ -2,13 +2,12 @@ use std::{io, process};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use thiserror::Error;
 use tokio::{
     sync::{mpsc, oneshot},
     task,
 };
 use tokio_util::sync::CancellationToken;
-
-use crate::ExecutionError;
 
 #[async_trait]
 pub trait Repl {
@@ -23,7 +22,7 @@ pub trait Repl {
 
 pub enum ReplMessage {
     Execute {
-        notif_sender: oneshot::Sender<Result<(), ExecutionError>>,
+        notif_sender: oneshot::Sender<Result<(), ReplError>>,
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
         code: String,
@@ -31,6 +30,14 @@ pub enum ReplMessage {
     Kill {
         notif_sender: oneshot::Sender<io::Result<()>>,
     },
+}
+
+#[derive(Error, Debug)]
+pub enum ReplError {
+    #[error("Execution failed")]
+    Failed,
+    #[error("Execution was interrupted")]
+    Interrupted,
 }
 
 pub struct ReplHandle {
@@ -43,7 +50,7 @@ impl ReplHandle {
         code: String,
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ReplError> {
         let (notif_sender, notif_receiver) = oneshot::channel();
         let message = ReplMessage::Execute {
             code,
@@ -70,6 +77,7 @@ pub fn launch<R>(repl_process: process::Child) -> ReplHandle
 where
     R: Repl + Send + 'static,
 {
+    // Minimize message loss by using blocking message with limited number of buffer in channel
     let (message_sender, message_receiver) = mpsc::channel(1);
     let repl = R::new(repl_process, message_receiver);
 
