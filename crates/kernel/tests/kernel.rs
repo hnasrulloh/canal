@@ -69,37 +69,55 @@ async fn kernel_can_be_interupted() {
     );
 }
 
-// #[googletest::test]
-// #[tokio::test]
-// async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
-//     // TODO: Fix this
+#[googletest::test]
+#[tokio::test]
+async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
+    let mut handle = create_kernel(10);
+    let (msg_exec1, io_receiver1) = create_message(99, "expensive");
+    let (msg_exec2, io_receiver2) = create_message(2, "2");
+    let (msg_exec3, io_receiver3) = create_message(3, "3");
 
-//     let (kernel, message_sender) = create_kernel(10);
+    let queue_result1 = handle.send(msg_exec1).await;
+    let queue_result2 = handle.send(msg_exec2).await;
+    let queue_result3 = handle.send(msg_exec3).await;
 
-//     task::spawn(async move { run(kernel).await });
+    sleep(Duration::from_micros(10)).await; // sleep is needed to avoid polling race
+    handle.send(Message::Interrupt).await.unwrap();
 
-//     let (message1, io_receiver1) = create_message_execute("expensive");
-//     message_sender.send(message1).await.unwrap();
+    let exec_result1 = handle.recv().await;
+    let exec_result2 = handle.recv().await;
+    let exec_result3 = handle.recv().await;
 
-//     let (message2, io_receiver2) = create_message_execute("2");
-//     message_sender.send(message2).await.unwrap();
+    expect_that!(queue_result1, pat!(Ok(_)));
+    expect_that!(queue_result2, pat!(Ok(_)));
+    expect_that!(queue_result3, pat!(Ok(_)));
 
-//     let (message3, io_receiver3) = create_message_execute("3");
-//     message_sender.send(message3).await.unwrap();
+    expect_that!(
+        exec_result1,
+        pat!(Some(pat!(Err(pat!(MessageError::Cancelled(pat!(99)))))))
+    );
+    expect_that!(
+        exec_result2,
+        pat!(Some(pat!(Err(pat!(MessageError::Cancelled(pat!(2)))))))
+    );
+    expect_that!(
+        exec_result3,
+        pat!(Some(pat!(Err(pat!(MessageError::Cancelled(pat!(3)))))))
+    );
 
-//     // A slight waiting needed to avoid message processing race
-//     sleep(Duration::from_micros(10)).await;
-//     message_sender.send(Message::Interupt).await.unwrap();
-
-//     expect_that!(
-//         take_all_output(io_receiver1).await,
-//         is_utf8_string(eq("partial..."))
-//     );
-
-//     // No output for cancelled execs
-//     expect_that!(take_all_output(io_receiver2).await, is_utf8_string(eq("")));
-//     expect_that!(take_all_output(io_receiver3).await, is_utf8_string(eq("")));
-// }
+    expect_that!(
+        take_all_output(io_receiver1).await,
+        is_utf8_string(eq("partial..."))
+    );
+    expect_that!(
+        take_all_output(io_receiver2).await,
+        is_utf8_string(eq("")) // no byte sent
+    );
+    expect_that!(
+        take_all_output(io_receiver3).await,
+        is_utf8_string(eq("")) // no byte sent
+    );
+}
 
 fn create_kernel(capacity: usize) -> KernelHandle {
     kernel::launch(repl::launch::<MockRepl>(spawn_dummy_repl()), capacity)
