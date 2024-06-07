@@ -1,14 +1,16 @@
 mod mock_repl;
 mod utils;
 
+use std::time::Duration;
+
 use bytes::Bytes;
 use canal_kernel::{
     kernel::{self, KernelHandle},
-    repl, Message,
+    repl, Message, MessageError,
 };
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::sleep};
 use utils::{spawn_dummy_repl, take_all_output};
 
 #[googletest::test]
@@ -45,24 +47,27 @@ async fn kernel_processes_multiple_messages_succesfully() {
     expect_that!(exec_result2, pat!(Some(pat!(Ok(_)))));
 }
 
-// #[googletest::test]
-// #[tokio::test]
-// async fn kernel_can_be_interupted() {
-//     let (kernel, message_sender) = create_kernel(10);
-//     let (exec_message, io_receiver) = create_message_execute("expensive");
+#[googletest::test]
+#[tokio::test]
+async fn kernel_can_be_interupted() {
+    let mut handle = create_kernel(10);
+    let (msg_exec, io_receiver) = create_message(99, "expensive");
 
-//     task::spawn(async move { run(kernel).await });
-//     message_sender.send(exec_message).await.unwrap();
+    let queue_result = handle.send(msg_exec).await;
+    sleep(Duration::from_micros(10)).await; // sleep is needed to avoid polling race
+    handle.send(Message::Interrupt).await.unwrap();
+    let exec_result = handle.recv().await;
 
-//     // A slight waiting needed to avoid message processing race
-//     sleep(Duration::from_micros(10)).await;
-//     message_sender.send(Message::Interupt).await.unwrap();
-
-//     expect_that!(
-//         take_all_output(io_receiver).await,
-//         is_utf8_string(eq("partial..."))
-//     );
-// }
+    expect_that!(queue_result, pat!(Ok(_)));
+    expect_that!(
+        exec_result,
+        pat!(Some(pat!(Err(pat!(MessageError::Cancelled(pat!(99)))))))
+    );
+    expect_that!(
+        take_all_output(io_receiver).await,
+        is_utf8_string(eq("partial..."))
+    );
+}
 
 // #[googletest::test]
 // #[tokio::test]
