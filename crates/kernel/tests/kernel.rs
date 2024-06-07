@@ -59,6 +59,8 @@ async fn kernel_can_be_interupted() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
+    // TODO: Fix this
+
     let (kernel, message_sender) = create_kernel(10);
 
     task::spawn(async move { run(kernel).await });
@@ -84,13 +86,11 @@ async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
     // No output for cancelled execs
     expect_that!(take_all_output(io_receiver2).await, is_utf8_string(eq("")));
     expect_that!(take_all_output(io_receiver3).await, is_utf8_string(eq("")));
-
-    // TODO: Redesign kernel as an Actor
 }
 
 fn create_kernel(maximum_message_capacity: usize) -> (Kernel, mpsc::Sender<Message>) {
     let (message_sender, message_receiver) = mpsc::channel(8);
-    let repl = repl::using::<MockRepl>(spawn_dummy_repl());
+    let repl = repl::launch::<MockRepl>(spawn_dummy_repl());
     let kernel = Kernel::new(repl, message_receiver, maximum_message_capacity);
 
     (kernel, message_sender)
