@@ -103,9 +103,6 @@ async fn run_kernel(
         let exec_result_sender = exec_result_sender.clone();
 
         tokio::select! {
-            Some(exec) = exec_receiver.recv() => {
-                kernel.handle_exec(exec, exec_result_sender).await;
-            }
             Some(number_of_dropped_exec) = exec_cancellation_request_receiver.recv() => {
                 let mut execs = Vec::new();
                 exec_receiver.recv_many(&mut execs, number_of_dropped_exec).await;
@@ -114,6 +111,9 @@ async fn run_kernel(
                     let err = Err(MessageError::Cancelled(exec.message_id));
                     let _ = exec_result_sender.send(err).await;
                 }
+            }
+            Some(exec) = exec_receiver.recv() => {
+                kernel.handle_exec(exec, exec_result_sender).await;
             }
             else => {},
         }
