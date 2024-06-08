@@ -143,7 +143,6 @@ async fn kernel_returns_an_error_when_the_code_is_buggy() {
 
 #[googletest::test]
 #[tokio::test]
-#[ignore = ""]
 async fn kernel_drops_all_exec_message_in_queue_when_the_code_is_buggy() {
     let mut handle = create_kernel(10);
     let (msg_exec1, io_receiver1) = create_message(99, "buggy");

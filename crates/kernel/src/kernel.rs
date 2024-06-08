@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use tokio::{
@@ -7,6 +7,7 @@ use tokio::{
         OwnedSemaphorePermit, Semaphore,
     },
     task,
+    time::sleep,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -130,6 +131,15 @@ async fn run_kernel(
             }
             Some(exec) = exec_receiver.recv() => {
                 kernel.handle_exec(exec, exec_result_sender, queue_cancellation_token.clone()).await;
+
+                // This emulates latency of inter-process communication between kernel and REPL process.
+                // The average of time needed to send data is around 4-10 microseconds.
+                //
+                // Without any latency in between kernel and MockRepl, the cancellation request (sent by an mpsc)
+                // will arrive slightly slower than execution process by REPL.
+                if cfg!(debug_assertions) {
+                    sleep(Duration::from_micros(4)).await;
+                }
             }
             else => {},
         }
