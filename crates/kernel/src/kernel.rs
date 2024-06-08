@@ -39,6 +39,7 @@ impl Kernel {
         &self,
         exec: Exec,
         exec_result_sender: mpsc::Sender<Result<MessageId, MessageError>>,
+        exec_queue_cancellation: CancellationToken,
     ) {
         let result = self
             .repl
@@ -49,42 +50,54 @@ impl Kernel {
             Ok(_) => {
                 let _ = exec_result_sender.send(Ok(exec.message_id)).await;
             }
-            Err(e) => match e {
-                ReplError::Failed => {
-                    let msg_err = Err(MessageError::Failed(exec.message_id));
-                    let _ = exec_result_sender.send(msg_err).await;
+            Err(e) => {
+                match e {
+                    ReplError::Failed => {
+                        let msg_err = Err(MessageError::Failed(exec.message_id));
+                        let _ = exec_result_sender.send(msg_err).await;
+                    }
+                    ReplError::Interrupted => {
+                        let msg_err = Err(MessageError::Cancelled(exec.message_id));
+                        let _ = exec_result_sender.send(msg_err).await;
+                    }
                 }
-                ReplError::Interrupted => {
-                    let msg_err = Err(MessageError::Cancelled(exec.message_id));
-                    let _ = exec_result_sender.send(msg_err).await;
-                }
-            },
+
+                exec_queue_cancellation.cancel();
+            }
         };
     }
 }
 
 pub fn launch(repl: ReplHandle, queue_capacity: usize) -> KernelHandle {
-    let (message_sender, kernel_message_receiver) = mpsc::channel(queue_capacity);
+    let (message_sender, message_receiver) = mpsc::channel(queue_capacity);
 
     let (exec_sender, exec_receiver) = mpsc::channel(queue_capacity);
-    let (exec_cancellation_request_sender, exec_cancellation_request_receiver) = mpsc::channel(1);
+    let (queue_cancellation_request_sender, queue_cancellation_request_receiver) = mpsc::channel(1);
     let (exec_result_sender, exec_result_receiver) = mpsc::channel(2 * queue_capacity);
 
     let semaphore = Arc::new(Semaphore::new(queue_capacity));
+    let queue_cancellation_token = CancellationToken::new();
 
     task::spawn(process_message(
-        kernel_message_receiver,
+        message_receiver,
         exec_sender,
-        exec_cancellation_request_sender,
-        semaphore,
+        queue_cancellation_token.clone(),
+        semaphore.clone(),
     ));
 
     let kernel = Kernel { repl };
     task::spawn(run_kernel(
         kernel,
         exec_receiver,
-        exec_cancellation_request_receiver,
         exec_result_sender,
+        queue_cancellation_token.clone(),
+        queue_cancellation_request_receiver,
+    ));
+
+    task::spawn(watch_and_send_queue_cancellation_request(
+        queue_cancellation_request_sender.clone(),
+        queue_cancellation_token.clone(),
+        semaphore.clone(),
     ));
 
     KernelHandle {
@@ -96,8 +109,9 @@ pub fn launch(repl: ReplHandle, queue_capacity: usize) -> KernelHandle {
 async fn run_kernel(
     kernel: Kernel,
     mut exec_receiver: mpsc::Receiver<Exec>,
-    mut exec_cancellation_request_receiver: mpsc::Receiver<usize>,
     exec_result_sender: mpsc::Sender<Result<MessageId, MessageError>>,
+    queue_cancellation_token: CancellationToken,
+    mut queue_cancellation_request_receiver: mpsc::Receiver<usize>,
 ) {
     loop {
         let exec_result_sender = exec_result_sender.clone();
@@ -105,7 +119,7 @@ async fn run_kernel(
         tokio::select! {
             biased;
 
-            Some(number_of_dropped_exec) = exec_cancellation_request_receiver.recv() => {
+            Some(number_of_dropped_exec) = queue_cancellation_request_receiver.recv() => {
                 let mut execs = Vec::new();
                 exec_receiver.recv_many(&mut execs, number_of_dropped_exec).await;
 
@@ -115,7 +129,7 @@ async fn run_kernel(
                 }
             }
             Some(exec) = exec_receiver.recv() => {
-                kernel.handle_exec(exec, exec_result_sender).await;
+                kernel.handle_exec(exec, exec_result_sender, queue_cancellation_token.clone()).await;
             }
             else => {},
         }
@@ -125,7 +139,7 @@ async fn run_kernel(
 async fn process_message(
     mut message_receiver: mpsc::Receiver<Message>,
     exec_sender: mpsc::Sender<Exec>,
-    exec_cancellation_request_sender: mpsc::Sender<usize>,
+    queue_cancellation: CancellationToken,
     semaphore: Arc<Semaphore>,
 ) {
     let sigint_control = CancellationToken::new();
@@ -157,13 +171,25 @@ async fn process_message(
                 let _ = exec_sender.send(exec).await;
             }
             Message::Interrupt => {
-                let number_of_cancelled_exec = semaphore.available_permits();
-                let _ = exec_cancellation_request_sender
-                    .send(number_of_cancelled_exec)
-                    .await;
-
+                queue_cancellation.cancel();
                 sigint_control.cancel();
             }
+        }
+    }
+}
+
+async fn watch_and_send_queue_cancellation_request(
+    cancellation_request_sender: mpsc::Sender<usize>,
+    queue_cancellation_token: CancellationToken,
+    semaphore: Arc<Semaphore>,
+) {
+    loop {
+        tokio::select! {
+            _ = queue_cancellation_token.cancelled() => {
+                let number_of_cancelled_exec = semaphore.available_permits();
+                let _ = cancellation_request_sender.send(number_of_cancelled_exec).await;
+            }
+            else => {}
         }
     }
 }
