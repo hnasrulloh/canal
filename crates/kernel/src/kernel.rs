@@ -103,6 +103,8 @@ async fn run_kernel(
         let exec_result_sender = exec_result_sender.clone();
 
         tokio::select! {
+            biased;
+
             Some(number_of_dropped_exec) = exec_cancellation_request_receiver.recv() => {
                 let mut execs = Vec::new();
                 exec_receiver.recv_many(&mut execs, number_of_dropped_exec).await;
