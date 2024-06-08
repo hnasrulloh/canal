@@ -76,14 +76,14 @@ pub fn launch(repl: ReplHandle, queue_capacity: usize) -> KernelHandle {
     let (queue_cancellation_request_sender, queue_cancellation_request_receiver) = mpsc::channel(1);
     let (exec_result_sender, exec_result_receiver) = mpsc::channel(2 * queue_capacity);
 
-    let semaphore = Arc::new(Semaphore::new(queue_capacity));
+    let queue_semaphore = Arc::new(Semaphore::new(queue_capacity));
     let queue_cancellation_token = CancellationToken::new();
 
     task::spawn(process_message(
         message_receiver,
         exec_sender,
         queue_cancellation_token.clone(),
-        semaphore.clone(),
+        queue_semaphore.clone(),
     ));
 
     let kernel = Kernel { repl };
@@ -91,14 +91,14 @@ pub fn launch(repl: ReplHandle, queue_capacity: usize) -> KernelHandle {
         kernel,
         exec_receiver,
         exec_result_sender,
-        queue_cancellation_token.clone(),
         queue_cancellation_request_receiver,
+        queue_cancellation_token.clone(),
     ));
 
     task::spawn(watch_and_send_queue_cancellation_request(
         queue_cancellation_request_sender.clone(),
         queue_cancellation_token.clone(),
-        semaphore.clone(),
+        queue_semaphore.clone(),
     ));
 
     KernelHandle {
@@ -111,8 +111,8 @@ async fn run_kernel(
     kernel: Kernel,
     mut exec_receiver: mpsc::Receiver<Exec>,
     exec_result_sender: mpsc::Sender<Result<MessageId, MessageError>>,
-    queue_cancellation_token: CancellationToken,
     mut queue_cancellation_request_receiver: mpsc::Receiver<usize>,
+    queue_cancellation_token: CancellationToken,
 ) {
     loop {
         let exec_result_sender = exec_result_sender.clone();
@@ -149,13 +149,13 @@ async fn run_kernel(
 async fn process_message(
     mut message_receiver: mpsc::Receiver<Message>,
     exec_sender: mpsc::Sender<Exec>,
-    queue_cancellation: CancellationToken,
-    semaphore: Arc<Semaphore>,
+    queue_cancellation_token: CancellationToken,
+    queue_semaphore: Arc<Semaphore>,
 ) {
     let sigint_control = CancellationToken::new();
 
     while let Some(msg) = message_receiver.recv().await {
-        let semaphore = semaphore.clone();
+        let semaphore = queue_semaphore.clone();
 
         match msg {
             Message::Execute {
@@ -163,10 +163,10 @@ async fn process_message(
                 io_sender,
                 code,
             } => {
-                let permit = semaphore
+                let queue_permit = semaphore
                     .acquire_owned()
                     .await
-                    .expect("Semaphore acquire error");
+                    .expect("Queue semaphore could not acquire");
 
                 let sigint = sigint_control.child_token();
 
@@ -175,13 +175,13 @@ async fn process_message(
                     code,
                     io_sender,
                     sigint,
-                    permit,
+                    queue_permit,
                 };
 
                 let _ = exec_sender.send(exec).await;
             }
             Message::Interrupt => {
-                queue_cancellation.cancel();
+                queue_cancellation_token.cancel();
                 sigint_control.cancel();
             }
         }
@@ -191,12 +191,12 @@ async fn process_message(
 async fn watch_and_send_queue_cancellation_request(
     cancellation_request_sender: mpsc::Sender<usize>,
     queue_cancellation_token: CancellationToken,
-    semaphore: Arc<Semaphore>,
+    queue_semaphore: Arc<Semaphore>,
 ) {
     loop {
         tokio::select! {
             _ = queue_cancellation_token.cancelled() => {
-                let number_of_cancelled_exec = semaphore.available_permits();
+                let number_of_cancelled_exec = queue_semaphore.available_permits();
                 let _ = cancellation_request_sender.send(number_of_cancelled_exec).await;
             }
             else => {}
@@ -210,5 +210,5 @@ struct Exec {
     io_sender: mpsc::UnboundedSender<Bytes>,
     sigint: CancellationToken,
     #[allow(dead_code)]
-    permit: OwnedSemaphorePermit,
+    queue_permit: OwnedSemaphorePermit,
 }
