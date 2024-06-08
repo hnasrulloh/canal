@@ -83,7 +83,7 @@ async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
     let queue_result2 = handle.send(msg_exec2).await;
     let queue_result3 = handle.send(msg_exec3).await;
 
-    sleep(Duration::from_micros(50)).await; // needed to avoid polling race
+    sleep(Duration::from_micros(50)).await; // needed to emulates IPC latency
     handle.send(Message::Interrupt).await.unwrap();
 
     let exec_result1 = handle.recv().await;
