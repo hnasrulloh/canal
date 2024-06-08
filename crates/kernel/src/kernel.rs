@@ -135,8 +135,8 @@ async fn run_kernel(
                 // This emulates latency of inter-process communication between kernel and REPL process.
                 // The average of time needed to send data is around 4-10 microseconds.
                 //
-                // Without any latency between kernel and MockRepl, the cancellation request (sent by an mpsc)
-                // will arrive slightly slower than execution process by REPL.
+                // Without any latency between the kernel and a real REPL process, the cancellation request
+                // (sent by a mpsc channel) will arrive slightly slower than the execution process by REPL.
                 if cfg!(debug_assertions) {
                     sleep(Duration::from_micros(4)).await;
                 }
