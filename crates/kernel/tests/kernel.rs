@@ -69,8 +69,6 @@ async fn kernel_returns_an_error_when_interupted() {
     );
 }
 
-// TODO: Fix message processing race (working message executed too early before interrupted/failed message sent to channel)
-
 #[googletest::test]
 #[tokio::test]
 async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
