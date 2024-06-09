@@ -10,23 +10,23 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     repl::{ReplError, ReplHandle},
-    Request, Response,
+    KernelRequest, KernelResponse,
 };
 
 pub struct KernelTerminal {
-    request_sender: mpsc::Sender<Request>,
-    response_receiver: mpsc::Receiver<Response>,
+    request_sender: mpsc::Sender<KernelRequest>,
+    response_receiver: mpsc::Receiver<KernelResponse>,
 }
 
 impl KernelTerminal {
-    pub async fn send(&self, message: Request) {
+    pub async fn send(&self, message: KernelRequest) {
         self.request_sender
             .send(message)
             .await
             .expect("Kernel is killed")
     }
 
-    pub async fn recv(&mut self) -> Option<Response> {
+    pub async fn recv(&mut self) -> Option<KernelResponse> {
         self.response_receiver.recv().await
     }
 }
@@ -39,7 +39,7 @@ impl Kernel {
     async fn handle_exec(
         &self,
         exec: Exec,
-        response_sender: mpsc::Sender<Response>,
+        response_sender: mpsc::Sender<KernelResponse>,
         exec_queue_cancellation: CancellationToken,
     ) {
         let result = self
@@ -50,19 +50,19 @@ impl Kernel {
         match result {
             Ok(_) => {
                 let _ = response_sender
-                    .send(Response::Success(exec.message_id))
+                    .send(KernelResponse::Success(exec.message_id))
                     .await;
             }
             Err(err) => {
                 match err {
                     ReplError::Failed => {
                         let _ = response_sender
-                            .send(Response::Failed(exec.message_id))
+                            .send(KernelResponse::Failed(exec.message_id))
                             .await;
                     }
                     ReplError::Interrupted => {
                         let _ = response_sender
-                            .send(Response::Cancelled(exec.message_id))
+                            .send(KernelResponse::Cancelled(exec.message_id))
                             .await;
                     }
                 }
@@ -117,7 +117,7 @@ pub fn launch(repl: ReplHandle, queue_capacity: usize) -> (KernelTerminal, Arc<S
 async fn process_exec(
     kernel: Kernel,
     mut exec_receiver: mpsc::Receiver<Exec>,
-    response_sender: mpsc::Sender<Response>,
+    response_sender: mpsc::Sender<KernelResponse>,
     mut queue_cancellation_info_receiver: mpsc::Receiver<usize>,
     queue_cancellation_token: CancellationToken,
 ) {
@@ -132,7 +132,7 @@ async fn process_exec(
                 exec_receiver.recv_many(&mut execs, number_of_dropped_exec).await;
 
                 for exec in execs.into_iter() {
-                    let _ = exec_result_sender.send(Response::Cancelled(exec.message_id)).await;
+                    let _ = exec_result_sender.send(KernelResponse::Cancelled(exec.message_id)).await;
                 }
             }
             Some(exec) = exec_receiver.recv() => {
@@ -153,7 +153,7 @@ async fn process_exec(
 }
 
 async fn process_request(
-    mut request_receiver: mpsc::Receiver<Request>,
+    mut request_receiver: mpsc::Receiver<KernelRequest>,
     exec_sender: mpsc::Sender<Exec>,
     queue_cancellation_token: CancellationToken,
     queue_semaphore: Arc<Semaphore>,
@@ -164,7 +164,7 @@ async fn process_request(
         let semaphore = queue_semaphore.clone();
 
         match msg {
-            Request::Execute {
+            KernelRequest::Execute {
                 message_id,
                 io_sender,
                 code,
@@ -186,7 +186,7 @@ async fn process_request(
 
                 let _ = exec_sender.send(exec).await;
             }
-            Request::Interrupt => {
+            KernelRequest::Interrupt => {
                 queue_cancellation_token.cancel();
                 sigint_control.cancel();
             }

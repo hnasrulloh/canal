@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 pub type MessageId = u32;
 
 #[derive(Debug)]
-pub enum Request {
+pub enum KernelRequest {
     Execute {
         message_id: MessageId,
         code: String,
@@ -17,7 +17,7 @@ pub enum Request {
 }
 
 #[derive(Debug)]
-pub enum Response {
+pub enum KernelResponse {
     Success(MessageId),
     Failed(MessageId),
     Cancelled(MessageId),
