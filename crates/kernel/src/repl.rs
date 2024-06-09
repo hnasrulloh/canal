@@ -1,23 +1,24 @@
-use std::{io, process};
+use std::{process, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, Mutex},
     task,
 };
 use tokio_util::sync::CancellationToken;
 
 #[async_trait]
 pub trait Repl {
-    fn new(process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self;
+    fn new(
+        process: Arc<Mutex<process::Child>>,
+        message_receiver: mpsc::Receiver<ReplMessage>,
+    ) -> Self;
 
     async fn handle_message(&mut self, message: ReplMessage);
 
     async fn next_message(&mut self) -> Option<ReplMessage>;
-
-    async fn terminate(self) -> io::Result<()>;
 }
 
 pub enum ReplMessage {
@@ -26,9 +27,6 @@ pub enum ReplMessage {
         io_sender: mpsc::UnboundedSender<Bytes>,
         sigint: CancellationToken,
         code: String,
-    },
-    Kill {
-        notif_sender: oneshot::Sender<io::Result<()>>,
     },
 }
 
@@ -62,18 +60,9 @@ impl ReplHandle {
         let _ = self.message_sender.send(message).await;
         notif_receiver.await.expect("Repl has been killed")
     }
-
-    pub async fn kill(self) -> io::Result<()> {
-        let (notif_sender, notif_receiver) = oneshot::channel();
-        let message = ReplMessage::Kill { notif_sender };
-        let _ = self.message_sender.send(message).await;
-
-        // We expect the `io::Result`, not the `Result` from chaneel
-        notif_receiver.await.expect("Repl has been killed")
-    }
 }
 
-pub fn launch<R>(repl_process: process::Child) -> ReplHandle
+pub fn launch<R>(repl_process: Arc<Mutex<process::Child>>) -> ReplHandle
 where
     R: Repl + Send + 'static,
 {

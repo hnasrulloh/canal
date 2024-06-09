@@ -1,22 +1,24 @@
-use std::{io, process, time::Duration};
+use std::{process, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use canal_kernel::repl::{Repl, ReplError, ReplMessage};
-use tokio::{sync::mpsc, time::sleep};
+use tokio::{
+    sync::{mpsc, Mutex},
+    time::sleep,
+};
 
 pub struct MockRepl {
-    process: process::Child,
     message_receiver: mpsc::Receiver<ReplMessage>,
 }
 
 #[async_trait]
 impl Repl for MockRepl {
-    fn new(process: process::Child, message_receiver: mpsc::Receiver<ReplMessage>) -> Self {
-        Self {
-            message_receiver,
-            process,
-        }
+    fn new(
+        _process: Arc<Mutex<process::Child>>,
+        message_receiver: mpsc::Receiver<ReplMessage>,
+    ) -> Self {
+        Self { message_receiver }
     }
 
     async fn handle_message(&mut self, message: ReplMessage) {
@@ -38,19 +40,11 @@ impl Repl for MockRepl {
 
                 let _ = notif_sender.send(result);
             }
-            ReplMessage::Kill { notif_sender } => {
-                let result = self.process.kill();
-                let _ = notif_sender.send(result);
-            }
         }
     }
 
     async fn next_message(&mut self) -> Option<ReplMessage> {
         self.message_receiver.recv().await
-    }
-
-    async fn terminate(self) -> io::Result<()> {
-        Ok(())
     }
 }
 

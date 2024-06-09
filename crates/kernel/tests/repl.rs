@@ -1,11 +1,15 @@
 mod mock_repl;
 mod utils;
 
-use canal_kernel::repl::{self, ReplError};
+use canal_kernel::repl::{self, ReplError, ReplHandle};
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use std::time::Duration;
-use tokio::{sync::mpsc, task, time::sleep};
+use std::{sync::Arc, time::Duration};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task,
+    time::sleep,
+};
 use tokio_util::sync::CancellationToken;
 use utils::{spawn_dummy_repl, take_all_output};
 
@@ -15,8 +19,7 @@ use utils::{spawn_dummy_repl, take_all_output};
 #[googletest::test]
 #[tokio::test]
 async fn repl_executes_a_code_in_mockrepl() {
-    let repl_process = spawn_dummy_repl();
-    let handle = repl::launch::<MockRepl>(repl_process);
+    let handle = launch_repl();
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -34,8 +37,7 @@ async fn repl_executes_a_code_in_mockrepl() {
 #[googletest::test]
 #[tokio::test]
 async fn repl_executes_a_buggy_code_in_mockrepl() {
-    let repl_process = spawn_dummy_repl();
-    let handle = repl::launch::<MockRepl>(repl_process);
+    let handle = launch_repl();
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -59,8 +61,7 @@ async fn repl_executes_a_buggy_code_in_mockrepl() {
 #[googletest::test]
 #[tokio::test]
 async fn repl_can_be_interupted_in_mockrepl() {
-    let repl_process = spawn_dummy_repl();
-    let handle = repl::launch::<MockRepl>(repl_process);
+    let handle = launch_repl();
     let (io_sender, io_receiver) = mpsc::unbounded_channel();
     let sigint = CancellationToken::new();
     let sigint_job = sigint.clone();
@@ -84,13 +85,8 @@ async fn repl_can_be_interupted_in_mockrepl() {
     expect_that!(job.await.unwrap(), pat!(Err(pat!(ReplError::Interrupted))));
 }
 
-#[googletest::test]
-#[tokio::test]
-async fn repl_can_be_killed_in_mockrepl() {
-    let repl_process = spawn_dummy_repl();
+fn launch_repl() -> ReplHandle {
+    let repl_process = Arc::new(Mutex::new(spawn_dummy_repl()));
     let handle = repl::launch::<MockRepl>(repl_process);
-
-    let result = handle.kill().await;
-
-    expect_that!(result, pat!(Ok(())));
+    handle
 }

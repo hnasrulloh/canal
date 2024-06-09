@@ -1,7 +1,7 @@
 mod mock_repl;
 mod utils;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use canal_kernel::{
@@ -10,7 +10,10 @@ use canal_kernel::{
 };
 use googletest::prelude::*;
 use mock_repl::MockRepl;
-use tokio::{sync::mpsc, time::sleep};
+use tokio::{
+    sync::{mpsc, Mutex},
+    time::sleep,
+};
 use utils::{spawn_dummy_repl, take_all_output};
 
 #[googletest::test]
@@ -154,8 +157,10 @@ async fn kernel_drops_all_exec_message_in_queue_when_the_code_is_buggy() {
 }
 
 fn launch_terminal(capacity: usize) -> KernelTerminal {
+    let dummpy_repl_process = Arc::new(Mutex::new(spawn_dummy_repl()));
+
     let (terminal, _queue_semaphore) =
-        kernel::launch(repl::launch::<MockRepl>(spawn_dummy_repl()), capacity);
+        kernel::launch(repl::launch::<MockRepl>(dummpy_repl_process), capacity);
 
     terminal
 }
