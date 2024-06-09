@@ -2,10 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use tokio::{
-    sync::{
-        mpsc::{self, error::SendError},
-        OwnedSemaphorePermit, Semaphore,
-    },
+    sync::{mpsc, OwnedSemaphorePermit, Semaphore},
     task,
     time::sleep,
 };
@@ -13,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     repl::{ReplError, ReplHandle},
-    MessageId, Request, Response,
+    Request, Response,
 };
 
 pub struct KernelHandle {
