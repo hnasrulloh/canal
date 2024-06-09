@@ -74,6 +74,9 @@ impl Kernel {
 }
 
 pub fn launch(repl: ReplHandle, queue_capacity: usize) -> (KernelHandle, Arc<Semaphore>) {
+    // Ensure the control request (interrupt & kill) can be handle immediately
+    let queue_capacity = queue_capacity + 1;
+
     let (request_sender, request_receiver) = mpsc::channel(queue_capacity);
     let (response_sender, response_receiver) = mpsc::channel(2 * queue_capacity);
 
