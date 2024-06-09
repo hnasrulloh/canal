@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use canal_kernel::{
-    kernel::{self, KernelHandle},
+    kernel::{self, KernelTerminal},
     repl, Request, Response,
 };
 use googletest::prelude::*;
@@ -16,11 +16,11 @@ use utils::{spawn_dummy_repl, take_all_output};
 #[googletest::test]
 #[tokio::test]
 async fn kernel_processes_a_message_succesfully() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request, io_receiver) = create_request_exec(1, "1");
 
-    handle.send(request).await;
-    let response = handle.recv().await.unwrap();
+    terminal.send(request).await;
+    let response = terminal.recv().await.unwrap();
 
     expect_that!(take_all_output(io_receiver).await, is_utf8_string(eq("1")));
     expect_that!(response, pat!(Response::Success(pat!(1))));
@@ -29,14 +29,14 @@ async fn kernel_processes_a_message_succesfully() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_processes_multiple_messages_succesfully() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request1, io_receiver1) = create_request_exec(1, "1");
     let (request2, io_receiver2) = create_request_exec(2, "2");
 
-    handle.send(request1).await;
-    handle.send(request2).await;
-    let response1 = handle.recv().await.unwrap();
-    let response2 = handle.recv().await.unwrap();
+    terminal.send(request1).await;
+    terminal.send(request2).await;
+    let response1 = terminal.recv().await.unwrap();
+    let response2 = terminal.recv().await.unwrap();
 
     expect_that!(take_all_output(io_receiver1).await, is_utf8_string(eq("1")));
     expect_that!(take_all_output(io_receiver2).await, is_utf8_string(eq("2")));
@@ -47,16 +47,16 @@ async fn kernel_processes_multiple_messages_succesfully() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_returns_an_error_when_interupted() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request, io_receiver) = create_request_exec(99, "expensive");
 
-    handle.send(request).await;
+    terminal.send(request).await;
 
     // sleep is needed to wait the request being executed
     sleep(Duration::from_micros(10)).await;
-    handle.send(Request::Interrupt).await;
+    terminal.send(Request::Interrupt).await;
 
-    let response = handle.recv().await.unwrap();
+    let response = terminal.recv().await.unwrap();
 
     expect_that!(
         take_all_output(io_receiver).await,
@@ -68,22 +68,22 @@ async fn kernel_returns_an_error_when_interupted() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request1, io_receiver1) = create_request_exec(99, "expensive");
     let (request2, io_receiver2) = create_request_exec(2, "2");
     let (request3, io_receiver3) = create_request_exec(3, "3");
 
-    handle.send(request1).await;
-    handle.send(request2).await;
-    handle.send(request3).await;
+    terminal.send(request1).await;
+    terminal.send(request2).await;
+    terminal.send(request3).await;
 
     // sleep is needed to wait the request being executed
     sleep(Duration::from_micros(50)).await;
-    handle.send(Request::Interrupt).await;
+    terminal.send(Request::Interrupt).await;
 
-    let response1 = handle.recv().await.unwrap();
-    let response2 = handle.recv().await.unwrap();
-    let response3 = handle.recv().await.unwrap();
+    let response1 = terminal.recv().await.unwrap();
+    let response2 = terminal.recv().await.unwrap();
+    let response3 = terminal.recv().await.unwrap();
 
     expect_that!(response1, pat!(Response::Cancelled(pat!(99))));
     expect_that!(response2, pat!(Response::Cancelled(pat!(2))));
@@ -106,11 +106,11 @@ async fn kernel_drops_all_exec_message_in_queue_when_interupted() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_returns_an_error_when_the_code_is_buggy() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request, io_receiver) = create_request_exec(99, "buggy");
 
-    handle.send(request).await;
-    let response = handle.recv().await.unwrap();
+    terminal.send(request).await;
+    let response = terminal.recv().await.unwrap();
 
     expect_that!(response, pat!(Response::Failed(pat!(99))));
     expect_that!(
@@ -122,18 +122,18 @@ async fn kernel_returns_an_error_when_the_code_is_buggy() {
 #[googletest::test]
 #[tokio::test]
 async fn kernel_drops_all_exec_message_in_queue_when_the_code_is_buggy() {
-    let mut handle = create_kernel(10);
+    let mut terminal = launch_terminal(10);
     let (request1, io_receiver1) = create_request_exec(99, "buggy");
     let (request2, io_receiver2) = create_request_exec(2, "2");
     let (request3, io_receiver3) = create_request_exec(3, "3");
 
-    handle.send(request1).await;
-    handle.send(request2).await;
-    handle.send(request3).await;
+    terminal.send(request1).await;
+    terminal.send(request2).await;
+    terminal.send(request3).await;
 
-    let response1 = handle.recv().await.unwrap();
-    let response2 = handle.recv().await.unwrap();
-    let response3 = handle.recv().await.unwrap();
+    let response1 = terminal.recv().await.unwrap();
+    let response2 = terminal.recv().await.unwrap();
+    let response3 = terminal.recv().await.unwrap();
 
     expect_that!(response1, pat!(Response::Failed(pat!(99))));
     expect_that!(response2, pat!(Response::Cancelled(pat!(2))));
@@ -153,11 +153,11 @@ async fn kernel_drops_all_exec_message_in_queue_when_the_code_is_buggy() {
     );
 }
 
-fn create_kernel(capacity: usize) -> KernelHandle {
-    let (handle, _queue_semaphore) =
+fn launch_terminal(capacity: usize) -> KernelTerminal {
+    let (terminal, _queue_semaphore) =
         kernel::launch(repl::launch::<MockRepl>(spawn_dummy_repl()), capacity);
 
-    handle
+    terminal
 }
 
 fn create_request_exec(message_id: u32, code: &str) -> (Request, mpsc::UnboundedReceiver<Bytes>) {

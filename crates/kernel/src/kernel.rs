@@ -13,12 +13,12 @@ use crate::{
     Request, Response,
 };
 
-pub struct KernelHandle {
+pub struct KernelTerminal {
     request_sender: mpsc::Sender<Request>,
     response_receiver: mpsc::Receiver<Response>,
 }
 
-impl KernelHandle {
+impl KernelTerminal {
     pub async fn send(&self, message: Request) {
         self.request_sender
             .send(message)
@@ -73,10 +73,7 @@ impl Kernel {
     }
 }
 
-pub fn launch(repl: ReplHandle, queue_capacity: usize) -> (KernelHandle, Arc<Semaphore>) {
-    // Ensure the control request (interrupt & kill) can be handle immediately
-    let queue_capacity = queue_capacity + 1;
-
+pub fn launch(repl: ReplHandle, queue_capacity: usize) -> (KernelTerminal, Arc<Semaphore>) {
     let (request_sender, request_receiver) = mpsc::channel(queue_capacity);
     let (response_sender, response_receiver) = mpsc::channel(2 * queue_capacity);
 
@@ -109,12 +106,12 @@ pub fn launch(repl: ReplHandle, queue_capacity: usize) -> (KernelHandle, Arc<Sem
         queue_semaphore.clone(),
     ));
 
-    let handle = KernelHandle {
+    let terminal = KernelTerminal {
         request_sender,
         response_receiver,
     };
 
-    (handle, queue_semaphore)
+    (terminal, queue_semaphore)
 }
 
 async fn process_exec(
