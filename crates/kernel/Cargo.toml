@@ -1,5 +1,5 @@
 [package]
-name = "canal_kernel"
+name = "canal-kernel"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

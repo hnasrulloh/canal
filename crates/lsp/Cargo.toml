@@ -1,5 +1,5 @@
 [package]
-name = "canal_lsp"
+name = "canal-lsp"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

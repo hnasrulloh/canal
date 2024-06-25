@@ -23,10 +23,10 @@ zeromq = "0.4"
 # dev-dependencies
 googletest = "0.11"
 # local-dependencies
-canal_collab = { path = "crates/collab" }
-canal_fs = { path = "crates/fs" }
-canal_kernel = { path = "crates/kernel" }
-canal_workspace = { path = "crates/workspace" }
+canal-collab = { path = "crates/collab" }
+canal-fs = { path = "crates/fs" }
+canal-kernel = { path = "crates/kernel" }
+canal-workspace = { path = "crates/workspace" }
 
 
 [package]

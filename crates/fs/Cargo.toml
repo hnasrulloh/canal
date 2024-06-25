@@ -1,5 +1,5 @@
 [package]
-name = "canal_fs"
+name = "canal-fs"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
