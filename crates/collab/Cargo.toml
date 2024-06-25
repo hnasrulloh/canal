@@ -1,0 +1,16 @@
+[package]
+name = "canal_collab"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+yrs.workspace = true
+
+[dev-dependencies]
+googletest.workspace = true
