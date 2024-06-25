@@ -120,16 +120,6 @@ checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
 [[package]]
 name = "canal"
 version = "0.1.0"
-dependencies = [
- "canal_document",
-]
-
-[[package]]
-name = "canal_document"
-version = "0.1.0"
-dependencies = [
- "thiserror",
-]
 
 [[package]]
 name = "canal_fs"
@@ -481,10 +471,6 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
-
-[[package]]
-name = "playdb"
-version = "0.1.0"
 
 [[package]]
 name = "ppv-lite86"

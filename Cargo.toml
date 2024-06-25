@@ -20,16 +20,15 @@ thiserror = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
+yrs = "0.18"
 zeromq = "0.4"
 # dev-dependencies
 googletest = "0.11"
 mockall = "0.12"
 # local-dependencies
-canal_document = { path = "crates/document" }
 canal_fs = { path = "crates/fs" }
 canal_kernel = { path = "crates/kernel" }
 canal_workspace = { path = "crates/workspace" }
-playdb = { path = "crates/playdb" }
 
 
 [package]
@@ -39,6 +38,3 @@ edition.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-
-[dependencies]
-canal_document.workspace = true
