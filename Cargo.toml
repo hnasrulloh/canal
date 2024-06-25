@@ -11,21 +11,19 @@ homepage = ""
 
 [workspace.dependencies]
 # dependencies
-async-stream = "0.3"
 async-trait = "0.1"
 bytes = "1"
 rmp-serde = "1"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
 tokio-util = "0.7"
 yrs = "0.18"
 zeromq = "0.4"
 # dev-dependencies
 googletest = "0.11"
-mockall = "0.12"
 # local-dependencies
+canal_collab = { path = "crates/collab" }
 canal_fs = { path = "crates/fs" }
 canal_kernel = { path = "crates/kernel" }
 canal_workspace = { path = "crates/workspace" }
